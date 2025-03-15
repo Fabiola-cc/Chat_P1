@@ -3,44 +3,65 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QTimer>
 #include <iostream>
 
-class WebSocketClient : public QWidget {
+class ChatClient : public QWidget {
     Q_OBJECT
 
 public:
-    WebSocketClient(QWidget *parent = nullptr) : QWidget(parent) {
-        setWindowTitle("Cliente WebSocket");
-        
+    ChatClient(QWidget *parent = nullptr) : QWidget(parent) {
+        setWindowTitle("ChatCliente WebSocket");
+
         QVBoxLayout *layout = new QVBoxLayout(this);
         statusLabel = new QLabel("Esperando conexión...", this);
         layout->addWidget(statusLabel);
         setLayout(layout);
 
-        // Conectar señal de conexión del WebSocket a un slot de esta clase
-        connect(&socket, &QWebSocket::connected, this, &WebSocketClient::onConnected);
-        
-        // Iniciar la conexión
-        socket.open(QUrl("ws://localhost:8080"));
+        // Conectar señales de WebSocket a slots de esta clase
+        connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);
+        connect(&socket, &QWebSocket::disconnected, this, &ChatClient::onDisconnected);
+
+        // Inicializar temporizador de reconexión, pero no arrancarlo aún
+        reconnectTimer = new QTimer(this);
+        reconnectTimer->setInterval(5000);  // Intentar reconectar cada 5 segundos
+        connect(reconnectTimer, &QTimer::timeout, this, &ChatClient::attemptReconnect);
+
+        // Intentar la conexión inicial
+        connectToServer();
     }
 
 public slots:
     void onConnected() {
-        std::cout << "✅ Conectado al servidor WebSocket!" << std::endl;
         statusLabel->setText("✅ Conectado al servidor WebSocket!");
+        reconnectTimer->stop();
+    }
+
+    void onDisconnected() {
+        statusLabel->setText("❌ Desconectado. Intentando reconectar...");
+        reconnectTimer->start();
+    }
+
+    void attemptReconnect() {
+        connectToServer();
+    }
+
+private:
+    void connectToServer() {
+        socket.open(QUrl("ws://localhost:8080"));
     }
 
 private:
     QWebSocket socket;
     QLabel *statusLabel;
+    QTimer *reconnectTimer;
 };
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
 
-    WebSocketClient client;
+    ChatClient client;
     client.show();
 
     return app.exec();  // Mantiene el bucle de eventos activo
 }
-

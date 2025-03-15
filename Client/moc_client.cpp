@@ -21,25 +21,25 @@
 QT_BEGIN_MOC_NAMESPACE
 QT_WARNING_PUSH
 QT_WARNING_DISABLE_DEPRECATED
-struct qt_meta_stringdata_WebSocketClient_t {
+struct qt_meta_stringdata_ChatClient_t {
     QByteArrayData data[1];
-    char stringdata0[16];
+    char stringdata0[11];
 };
 #define QT_MOC_LITERAL(idx, ofs, len) \
     Q_STATIC_BYTE_ARRAY_DATA_HEADER_INITIALIZER_WITH_OFFSET(len, \
-    qptrdiff(offsetof(qt_meta_stringdata_WebSocketClient_t, stringdata0) + ofs \
+    qptrdiff(offsetof(qt_meta_stringdata_ChatClient_t, stringdata0) + ofs \
         - idx * sizeof(QByteArrayData)) \
     )
-static const qt_meta_stringdata_WebSocketClient_t qt_meta_stringdata_WebSocketClient = {
+static const qt_meta_stringdata_ChatClient_t qt_meta_stringdata_ChatClient = {
     {
-QT_MOC_LITERAL(0, 0, 15) // "WebSocketClient"
+QT_MOC_LITERAL(0, 0, 10) // "ChatClient"
 
     },
-    "WebSocketClient"
+    "ChatClient"
 };
 #undef QT_MOC_LITERAL
 
-static const uint qt_meta_data_WebSocketClient[] = {
+static const uint qt_meta_data_ChatClient[] = {
 
  // content:
        8,       // revision
@@ -55,7 +55,7 @@ static const uint qt_meta_data_WebSocketClient[] = {
        0        // eod
 };
 
-void WebSocketClient::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void **_a)
+void ChatClient::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void **_a)
 {
     (void)_o;
     (void)_id;
@@ -63,30 +63,30 @@ void WebSocketClient::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int 
     (void)_a;
 }
 
-QT_INIT_METAOBJECT const QMetaObject WebSocketClient::staticMetaObject = { {
+QT_INIT_METAOBJECT const QMetaObject ChatClient::staticMetaObject = { {
     QMetaObject::SuperData::link<QWidget::staticMetaObject>(),
-    qt_meta_stringdata_WebSocketClient.data,
-    qt_meta_data_WebSocketClient,
+    qt_meta_stringdata_ChatClient.data,
+    qt_meta_data_ChatClient,
     qt_static_metacall,
     nullptr,
     nullptr
 } };
 
 
-const QMetaObject *WebSocketClient::metaObject() const
+const QMetaObject *ChatClient::metaObject() const
 {
     return QObject::d_ptr->metaObject ? QObject::d_ptr->dynamicMetaObject() : &staticMetaObject;
 }
 
-void *WebSocketClient::qt_metacast(const char *_clname)
+void *ChatClient::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_meta_stringdata_WebSocketClient.stringdata0))
+    if (!strcmp(_clname, qt_meta_stringdata_ChatClient.stringdata0))
         return static_cast<void*>(this);
     return QWidget::qt_metacast(_clname);
 }
 
-int WebSocketClient::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
+int ChatClient::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
 {
     _id = QWidget::qt_metacall(_c, _id, _a);
     return _id;

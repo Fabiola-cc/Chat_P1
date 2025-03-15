@@ -4,14 +4,14 @@
 #include <QWidget>
 #include <QWebSocket>
 
-class WebSocketClient : public QWidget {
+class ChatClient : public QWidget {
     Q_OBJECT  // ← Necesario para señales y ranuras
 
 public:
-    explicit WebSocketClient(QWidget *parent = nullptr);
+    explicit ChatClient(QWidget *parent = nullptr);
 
 private:
     QWebSocket socket;
 };
 
-#endif // WEBSOCKETCLIENT_H
+#endif // ChatClient_H
