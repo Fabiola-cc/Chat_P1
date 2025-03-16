@@ -1,0 +1,22 @@
+# Archivos compilados
+*.o
+*.obj
+
+# Archivos de Qt y qmake
+*.pro.user
+*.qmake.stash
+Makefile
+
+# Archivos de MOC (Meta-Object Compiler de Qt)
+moc_*
+
+# Archivos ejecutables
+client
+server
+
+# Configuración local de VS Code
+.vscode/
+
+# Claves de acceso
+SSH
+SSH.pub
