@@ -9,6 +9,9 @@
 #include <QTextEdit>
 #include <iostream>
 
+using namespace std;
+#include "MessageHandler.h"
+
 class ChatClient : public QWidget {
     Q_OBJECT
 
@@ -30,6 +33,10 @@ public:
         chatArea = new QTextEdit(this);
         chatArea->setReadOnly(true);
         chatArea->hide();  // Ocultar al inicio
+        messageInput = new QLineEdit( this);
+        messageInput->hide();  // Ocultar al inicio
+        sendButton = new QPushButton("Enviar", this);
+        sendButton->hide();  // Ocultar al inicio
 
         layout->addWidget(hostInput);
         layout->addWidget(portInput);
@@ -37,6 +44,8 @@ public:
         layout->addWidget(connectButton);
         layout->addWidget(statusLabel);
         layout->addWidget(chatArea);  // Añadir área de chat
+        layout->addWidget(messageInput);
+        layout->addWidget(sendButton);
 
         setLayout(layout);
 
@@ -45,6 +54,9 @@ public:
         connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);
         connect(&socket, &QWebSocket::disconnected, this, &ChatClient::onDisconnected);
         connect(&socket, &QWebSocket::textMessageReceived, this, &ChatClient::onMessageReceived);
+
+        // Crear el manejador de mensajes
+        messageHandler = new MessageHandler(socket, messageInput, sendButton, chatArea, this);
 
         // Temporizador de reconexión
         reconnectTimer = new QTimer(this);
@@ -71,17 +83,20 @@ public slots:
     void onConnected() {
         statusLabel->setText("✅ Conectado al servidor WebSocket!");
         reconnectTimer->stop();
-
-        // Ocultar los inputs y el botón
+    
+        // Ocultar los inputs de conexión
         hostInput->hide();
         portInput->hide();
         usernameInput->hide();
         connectButton->hide();
-
-        // Mostrar la interfaz de chat
+    
+        // Mostrar el área de chat y los controles de mensaje
         chatArea->show();
+        messageInput->show();
+        sendButton->show();
+    
         chatArea->append("🟢 Conectado al chat!");
-    }
+    }    
 
     void onDisconnected() {
         statusLabel->setText("❌ Desconectado.");
@@ -92,7 +107,6 @@ public slots:
     }
 
     void onMessageReceived(const QString &message) {
-        chatArea->append("💬 " + message);
     }
 
 private:
@@ -104,6 +118,9 @@ private:
     QLineEdit *usernameInput;
     QPushButton *connectButton;
     QTextEdit *chatArea;
+    QLineEdit *messageInput;
+    QPushButton *sendButton;
+    MessageHandler *messageHandler;
 };
 
 int main(int argc, char *argv[]) {

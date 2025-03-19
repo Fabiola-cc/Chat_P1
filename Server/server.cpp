@@ -37,6 +37,79 @@ void print_users() {
     cout << endl;
 }
 
+void send_users_list(const string& sender, websocket::stream<tcp::socket>& ws) {
+    lock_guard<mutex> lock(users_mutex);
+
+    vector<uint8_t> response;
+    response.push_back(51);  // Código de mensaje (respuesta a listar usuarios)
+    response.push_back(users.size());  // Número de usuarios
+
+    for (const auto& [user, status] : users) {
+        response.push_back(user.size());
+        response.insert(response.end(), user.begin(), user.end());
+        response.push_back(status);
+    }
+
+    ws.write(net::buffer(response));
+}
+
+
+void process_chat_message(const string& sender, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {
+    if (data.size() < 3) return;
+
+    uint8_t usernameLen = data[1];
+    if (data.size() < 2 + usernameLen + 1) return;
+
+    string recipient(data.begin() + 2, data.begin() + 2 + usernameLen);
+    uint8_t messageLen = data[2 + usernameLen];
+    if (data.size() < 3 + usernameLen + messageLen) return;
+
+    string message(data.begin() + 3 + usernameLen, data.begin() + 3 + usernameLen + messageLen);
+
+    cout << "💬 " << sender << " → " << recipient << ": " << message << endl;
+
+    vector<uint8_t> response;
+    response.push_back(55);  // Código de mensaje de respuesta
+    response.push_back(sender.size());
+    response.insert(response.end(), sender.begin(), sender.end());
+    response.push_back(messageLen);
+    response.insert(response.end(), message.begin(), message.end());
+
+    if (recipient == "~") {
+        // Chat general: enviar a todos los clientes conectados
+        for (auto& [user, status] : users) {
+            if (status == 1) {  // Solo usuarios activos
+                ws.write(net::buffer(response));
+            }
+        }
+    } else {
+        // Mensaje privado: solo al destinatario
+        if (users.find(recipient) != users.end() && users[recipient] == 1) {
+            ws.write(net::buffer(response));
+        } else {
+            cerr << "⚠️ Usuario no disponible: " << recipient << endl;
+        }
+    }
+}
+
+void handle_message(const string& sender, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {
+    if (data.empty()) return;
+
+    uint8_t messageType = data[0];  // Código del mensaje
+
+    switch (messageType) {
+        case 1:  // Listar usuarios conectados
+            send_users_list(sender, ws);
+            break;
+        case 4:  // Enviar mensaje a otro usuario o chat general
+            process_chat_message(sender, data, ws);
+            break;
+        default:
+            cerr << "⚠️ Mensaje no reconocido: " << (int)messageType << endl;
+            break;
+    }
+}
+
 void do_session(tcp::socket socket) {
     string username; // Declaramos username antes del try
 
@@ -78,14 +151,15 @@ void do_session(tcp::socket socket) {
         print_users();
 
         while (true) {
-            beast::multi_buffer buffer;
+            beast::flat_buffer buffer;
             ws.read(buffer);
-            string message = beast::buffers_to_string(buffer.data());
+            auto data = buffer.data();
+            vector<uint8_t> message_data(boost::asio::buffer_cast<const uint8_t*>(data), 
+                                         boost::asio::buffer_cast<const uint8_t*>(data) + boost::asio::buffer_size(data));
 
-            cout << "💬 Mensaje de " << username << ": " << message << endl;
-
-            // Enviar una respuesta de confirmación
-            ws.write(net::buffer("Hola " + username + ", tu mensaje fue recibido."));
+            if (!message_data.empty()) {
+                handle_message(username, message_data, ws);
+            }
         }
 
     } catch (const std::exception& e) {
@@ -102,6 +176,7 @@ void do_session(tcp::socket socket) {
         print_users();
     }
 }
+
 
 
 int main() {
