@@ -15,8 +15,9 @@ public:
     explicit MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton* button, QTextEdit* chatArea, QObject* parent = nullptr);
 
 public slots:
-    void sendMessage();  // Enviar mensaje al servidor
-    void receiveMessage(const QString& message);  // Manejar mensajes recibidos
+    void sendMessage();
+    void receiveMessage(const QString& message);
+    void requestChatHistory(const QString& chatName);  // 🔹 Nueva función
 
 private:
     QWebSocket& socket;
@@ -24,7 +25,7 @@ private:
     QPushButton* sendButton;
     QTextEdit* chatArea;
 
-    QByteArray buildMessage(quint8 type, const QString& param1 = "", const QString& param2 = "");  
+    QByteArray buildMessage(quint8 type, const QString& param1 = "", const QString& param2 = "");
 };
 
 #endif // MESSAGE_HANDLER_H

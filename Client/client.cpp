@@ -96,6 +96,9 @@ public slots:
         sendButton->show();
     
         chatArea->append("🟢 Conectado al chat!");
+
+        // 🔹 Solicitar historial del chat general (~)
+        messageHandler->requestChatHistory("~");
     }    
 
     void onDisconnected() {

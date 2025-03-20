@@ -16,6 +16,11 @@ using namespace std;
 unordered_map<string, int> users;
 mutex users_mutex; // Mutex para proteger el acceso al diccionario
 
+// Historial de mensajes
+unordered_map<string, vector<pair<string, string>>> chatHistory;  // {usuario o "~" → [(remitente, mensaje)]}
+mutex history_mutex;
+
+
 // Función para extraer el nombre del usuario de la URL WebSocket
 string extract_username(const beast::http::request<beast::http::string_body>& req) {
     string target(req.target());
@@ -53,6 +58,32 @@ void send_users_list(const string& sender, websocket::stream<tcp::socket>& ws) {
     ws.write(net::buffer(response));
 }
 
+void get_chat_history(const string& requester, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {
+    if (data.size() < 2) return;
+
+    uint8_t chatLen = data[1];
+    if (data.size() < 2 + chatLen) return;
+
+    string chatName(data.begin() + 2, data.begin() + 2 + chatLen);
+
+    vector<uint8_t> response;
+    response.push_back(56);  // Código de respuesta de historial
+    {
+        lock_guard<mutex> lock(history_mutex);
+
+        uint8_t numMessages = chatHistory[chatName].size();
+        response.push_back(numMessages);  // Número de mensajes
+
+        for (const auto& [sender, msg] : chatHistory[chatName]) {
+            response.push_back(sender.size());
+            response.insert(response.end(), sender.begin(), sender.end());
+            response.push_back(msg.size());
+            response.insert(response.end(), msg.begin(), msg.end());
+        }
+    }
+
+    ws.write(net::buffer(response));
+}
 
 void process_chat_message(const string& sender, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {
     if (data.size() < 3) return;
@@ -68,22 +99,25 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data, web
 
     cout << "💬 " << sender << " → " << recipient << ": " << message << endl;
 
+    {
+        lock_guard<mutex> lock(history_mutex);
+        chatHistory[recipient].emplace_back(sender, message);  // 🔹 Guardamos en el historial
+    }
+
     vector<uint8_t> response;
-    response.push_back(55);  // Código de mensaje de respuesta
+    response.push_back(55);  // Código de mensaje recibido
     response.push_back(sender.size());
     response.insert(response.end(), sender.begin(), sender.end());
     response.push_back(messageLen);
     response.insert(response.end(), message.begin(), message.end());
 
     if (recipient == "~") {
-        // Chat general: enviar a todos los clientes conectados
         for (auto& [user, status] : users) {
-            if (status == 1) {  // Solo usuarios activos
+            if (status == 1) {
                 ws.write(net::buffer(response));
             }
         }
     } else {
-        // Mensaje privado: solo al destinatario
         if (users.find(recipient) != users.end() && users[recipient] == 1) {
             ws.write(net::buffer(response));
         } else {
@@ -103,6 +137,9 @@ void handle_message(const string& sender, const vector<uint8_t>& data, websocket
             break;
         case 4:  // Enviar mensaje a otro usuario o chat general
             process_chat_message(sender, data, ws);
+            break;
+        case 5: // Cargar historial de mensajes
+            get_chat_history(sender, data, ws);
             break;
         default:
             cerr << "⚠️ Mensaje no reconocido: " << (int)messageType << endl;
