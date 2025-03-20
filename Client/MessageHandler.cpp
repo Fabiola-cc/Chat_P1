@@ -1,7 +1,7 @@
 #include "MessageHandler.h"
 
-MessageHandler::MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton* button, QTextEdit* chatArea, QObject* parent)
-    : QObject(parent), socket(socket), messageInput(input), sendButton(button), chatArea(chatArea) {
+MessageHandler::MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton* button, QTextEdit* chatArea, QComboBox* userList, QObject* parent)
+    : QObject(parent), socket(socket), messageInput(input), sendButton(button), chatArea(chatArea), userList(userList) {
     
     connect(sendButton, &QPushButton::clicked, this, &MessageHandler::sendMessage);
     connect(&socket, &QWebSocket::textMessageReceived, this, &MessageHandler::receiveMessage);
@@ -25,13 +25,16 @@ void MessageHandler::sendMessage() {
         return;
     }
 
-    QByteArray formattedMessage = buildMessage(4, "~", message);  // Código 4 = Mensaje al chat general
+    QString recipient = userList->currentText();  //  Obtener usuario seleccionado
+    if (recipient == "General") recipient = "~";  //  Si no hay usuario, usar el chat general
+
+    QByteArray formattedMessage = buildMessage(4, recipient, message);  // Código 4 = Mensaje al chat general
     socket.sendBinaryMessage(formattedMessage);
 
     messageInput->clear();
 }
 
-// 📌 Construye un mensaje binario según el protocolo
+// Construye un mensaje binario según el protocolo
 QByteArray MessageHandler::buildMessage(quint8 type, const QString& param1, const QString& param2) {
     QByteArray message;
     message.append(static_cast<char>(type));  // Código del mensaje
@@ -55,16 +58,34 @@ void MessageHandler::receiveMessage(const QString& message) {
 
     quint8 messageType = static_cast<quint8>(data[0]);
 
-    if (messageType == 55) {  // 📩 Mensaje recibido normal
+    if (messageType == 51) {  // Respuesta con lista de usuarios
+        userList->clear();  // Vaciar antes de agregar nuevos usuarios
+
+        quint8 numUsers = static_cast<quint8>(data[1]);
+        int pos = 2;
+        userList->addItem(QString("General"));
+
+        for (quint8 i = 0; i < numUsers; i++) {
+            quint8 usernameLen = static_cast<quint8>(data[pos]);
+            QString username = QString::fromUtf8(data.mid(pos + 1, usernameLen));
+            pos += 1 + usernameLen;
+
+            quint8 status = static_cast<quint8>(data[pos]);
+            pos += 1;
+
+            userList->addItem(username);  // Agregar usuarios al QComboBox
+        }
+    } 
+    else if (messageType == 55) {  // Mensaje recibido normal
         quint8 usernameLen = static_cast<quint8>(data[1]);
         QString username = QString::fromUtf8(data.mid(2, usernameLen));
         quint8 messageLen = static_cast<quint8>(data[2 + usernameLen]);
         QString content = QString::fromUtf8(data.mid(3 + usernameLen, messageLen));
-
+        
         chatArea->append("💬 " + username + ": " + content);
     } 
-    else if (messageType == 56) {  // 📜 Respuesta de historial de chat
-        chatArea->clear();  // 🔹 Limpiar chat antes de mostrar historial
+    else if (messageType == 56) {  // Respuesta de historial de chat
+        chatArea->clear();  //  Limpiar chat antes de mostrar historial
 
         quint8 numMessages = static_cast<quint8>(data[1]);
         int pos = 2;

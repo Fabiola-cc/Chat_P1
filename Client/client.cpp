@@ -8,9 +8,10 @@
 #include <QPushButton>
 #include <QTextEdit>
 #include <iostream>
+#include <QComboBox>
+#include "MessageHandler.h"
 
 using namespace std;
-#include "MessageHandler.h"
 
 class ChatClient : public QWidget {
     Q_OBJECT
@@ -37,6 +38,8 @@ public:
         messageInput->hide();  // Ocultar al inicio
         sendButton = new QPushButton("Enviar", this);
         sendButton->hide();  // Ocultar al inicio
+        userList = new QComboBox(this);  // 🔹 Lista de usuarios
+        userList->hide();
 
         layout->addWidget(hostInput);
         layout->addWidget(portInput);
@@ -44,6 +47,7 @@ public:
         layout->addWidget(connectButton);
         layout->addWidget(statusLabel);
         layout->addWidget(chatArea);  // Añadir área de chat
+        layout->addWidget(userList);
         layout->addWidget(messageInput);
         layout->addWidget(sendButton);
 
@@ -55,8 +59,10 @@ public:
         connect(&socket, &QWebSocket::disconnected, this, &ChatClient::onDisconnected);
         connect(&socket, &QWebSocket::textMessageReceived, this, &ChatClient::onMessageReceived);
 
+        connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);  // 🔹 Llamar cuando se selecciona un usuario
+
         // Crear el manejador de mensajes
-        messageHandler = new MessageHandler(socket, messageInput, sendButton, chatArea, this);
+        messageHandler = new MessageHandler(socket, messageInput, sendButton, chatArea, userList, this);
 
         // Temporizador de reconexión
         reconnectTimer = new QTimer(this);
@@ -92,6 +98,7 @@ public slots:
     
         // Mostrar el área de chat y los controles de mensaje
         chatArea->show();
+        userList->show();
         messageInput->show();
         sendButton->show();
     
@@ -110,6 +117,14 @@ public slots:
     }
 
     void onMessageReceived(const QString &message) {
+        // chatArea->append("💬 " + message);
+    }
+
+    void onUserSelected() {
+        QString selectedUser = userList->currentText();
+        if (!selectedUser.isEmpty()) {
+            messageHandler->requestChatHistory(selectedUser);  // 🔹 Cargar historial del usuario seleccionado
+        }
     }
 
 private:
@@ -123,6 +138,7 @@ private:
     QTextEdit *chatArea;
     QLineEdit *messageInput;
     QPushButton *sendButton;
+    QComboBox *userList;
     MessageHandler *messageHandler;
 };
 

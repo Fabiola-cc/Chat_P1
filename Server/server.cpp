@@ -42,7 +42,7 @@ void print_users() {
     cout << endl;
 }
 
-void send_users_list(const string& sender, websocket::stream<tcp::socket>& ws) {
+void send_users_list(websocket::stream<tcp::socket>& ws) {
     lock_guard<mutex> lock(users_mutex);
 
     vector<uint8_t> response;
@@ -112,18 +112,21 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data, web
     response.insert(response.end(), message.begin(), message.end());
 
     if (recipient == "~") {
+        // Chat general: enviar a TODOS los clientes conectados
         for (auto& [user, status] : users) {
-            if (status == 1) {
+            if (status == 1 && user != sender) {  // Evitar enviar el mensaje dos veces al mismo cliente
                 ws.write(net::buffer(response));
             }
         }
     } else {
         if (users.find(recipient) != users.end() && users[recipient] == 1) {
+            // Mensaje privado: enviar solo al destinatario
             ws.write(net::buffer(response));
         } else {
             cerr << "⚠️ Usuario no disponible: " << recipient << endl;
         }
     }
+    
 }
 
 void handle_message(const string& sender, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {
@@ -133,7 +136,7 @@ void handle_message(const string& sender, const vector<uint8_t>& data, websocket
 
     switch (messageType) {
         case 1:  // Listar usuarios conectados
-            send_users_list(sender, ws);
+            send_users_list(ws);
             break;
         case 4:  // Enviar mensaje a otro usuario o chat general
             process_chat_message(sender, data, ws);
@@ -148,44 +151,40 @@ void handle_message(const string& sender, const vector<uint8_t>& data, websocket
 }
 
 void do_session(tcp::socket socket) {
-    string username; // Declaramos username antes del try
-
+    string username;
     try {
         websocket::stream<tcp::socket> ws(move(socket));
-
-        // Realizar el handshake manual para obtener la URL de conexión
         beast::flat_buffer buffer;
         beast::http::request<beast::http::string_body> req;
         beast::http::read(ws.next_layer(), buffer, req);
 
-        username = extract_username(req); // Obtener el nombre del usuario
+        username = extract_username(req);
+
+        bool shouldAccept = false;
 
         {
             lock_guard<mutex> lock(users_mutex);
-
             if (users.find(username) == users.end()) {
-                // Si el usuario no está en la lista, crear un nuevo registro con estado 1 (conectado)
                 users[username] = 1;
                 cout << "✅ Nuevo usuario conectado: " << username << endl;
-                ws.accept(req); // Completar el handshake solo si el usuario es nuevo
+                shouldAccept = true;
+            } else if (users[username] == 0) {
+                users[username] = 1;
+                cout << "✅ Usuario reconectado: " << username << endl;
+                shouldAccept = true;
             } else {
-                // Si el usuario está en la lista, verificar el estado
-                if (users[username] == 0) {
-                    // Si el usuario está desconectado, cambiar el estado a 1 (conectado)
-                    users[username] = 1;
-                    cout << "✅ Usuario reconectado: " << username << endl;
-                    ws.accept(req); // Completar el handshake solo si el usuario estaba desconectado
-                } else {
-                    // Si el usuario ya está conectado (estado 1), regresar un mensaje de error
-                    cout << "⚠️ Intento de reconexión fallido, usuario ya esta regisrado y no esta desconectado: " << username << endl;
-                    ws.close(websocket::close_code::normal);
-                    return;  // Salir de la función, no procesamos más
-                }
+                cout << "⚠️ Intento de reconexión fallido para: " << username << endl;
+                ws.close(websocket::close_code::normal);
+                return;
             }
         }
-        
-        // Completar el handshake solo si el usuario ha sido aceptado
+
+        if (shouldAccept) {  
+            ws.accept(req);  // solo se llama una vez, fuera del lock
+        }
+
         print_users();
+        send_users_list(ws);  
 
         while (true) {
             beast::flat_buffer buffer;
@@ -198,23 +197,19 @@ void do_session(tcp::socket socket) {
                 handle_message(username, message_data, ws);
             }
         }
-
     } catch (const std::exception& e) {
         cerr << "⚠️ Error en la sesión: " << e.what() << endl;
     }
 
-    // Cuando la sesión termine, asegurarse de marcar al usuario como desconectado
-    if (!username.empty()) { // Verificamos que no sea una cadena vacía
+    if (!username.empty()) {
         {
             lock_guard<mutex> lock(users_mutex);
-            users[username] = 0; // Estado 0 = desconectado
+            users[username] = 0;
         }
         cout << "❌ Usuario desconectado: " << username << endl;
         print_users();
     }
 }
-
-
 
 int main() {
     try {
