@@ -12,9 +12,15 @@ namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
 using namespace std;
 
-// Diccionario global de usuarios (nombre -> estado)
-unordered_map<string, int> users;
-mutex users_mutex; // Mutex para proteger el acceso al diccionario
+// Añade esta estructura global
+struct ClientSession {
+    std::shared_ptr<websocket::stream<tcp::socket>> ws;
+    int status;
+};
+
+// Modifica el diccionario de usuarios
+std::unordered_map<std::string, ClientSession> clients;
+std::mutex clients_mutex; // Mutex para proteger el acceso al diccionario
 
 // Historial de mensajes
 unordered_map<string, vector<pair<string, string>>> chatHistory;  // {usuario o "~" → [(remitente, mensaje)]}
@@ -34,25 +40,25 @@ string extract_username(const beast::http::request<beast::http::string_body>& re
 
 // Función para imprimir la lista de usuarios conectados
 void print_users() {
-    lock_guard<mutex> lock(users_mutex);
-    cout << "Usuarios disponibles [" << users.size() << "]: ";
-    for (const auto& [user, status] : users) {
-        cout << user << ", " << status << " |";
+    lock_guard<mutex> lock(clients_mutex);
+    cout << "Usuarios disponibles [" << clients.size() << "]: ";
+    for (const auto& [user, client] : clients) {
+        cout << user << ", " << client.status << " |";
     }
     cout << endl;
 }
 
 void send_users_list(websocket::stream<tcp::socket>& ws) {
-    lock_guard<mutex> lock(users_mutex);
+    lock_guard<mutex> lock(clients_mutex);
 
     vector<uint8_t> response;
     response.push_back(51);  // Código de mensaje (respuesta a listar usuarios)
-    response.push_back(users.size());  // Número de usuarios
+    response.push_back(clients.size());  // Número de usuarios
 
-    for (const auto& [user, status] : users) {
+    for (const auto& [user, client] : clients) {
         response.push_back(user.size());
         response.insert(response.end(), user.begin(), user.end());
-        response.push_back(status);
+        response.push_back(client.status);
     }
 
     ws.write(net::buffer(response));
@@ -85,7 +91,7 @@ void get_chat_history(const string& requester, const vector<uint8_t>& data, webs
     ws.write(net::buffer(response));
 }
 
-void process_chat_message(const string& sender, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {
+void process_chat_message(const string& sender, const vector<uint8_t>& data) {
     if (data.size() < 3) return;
 
     uint8_t usernameLen = data[1];
@@ -101,7 +107,7 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data, web
 
     {
         lock_guard<mutex> lock(history_mutex);
-        chatHistory[recipient].emplace_back(sender, message);  // 🔹 Guardamos en el historial
+        chatHistory[recipient].emplace_back(sender, message);  // Guardamos en el historial
     }
 
     vector<uint8_t> response;
@@ -111,38 +117,53 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data, web
     response.push_back(messageLen);
     response.insert(response.end(), message.begin(), message.end());
 
+    lock_guard<mutex> lock(clients_mutex);
+    
+    // Enviar el mensaje al remitente (para que lo vea también)
+    if (clients.find(sender) != clients.end() && clients[sender].status == 1) {
+        clients[sender].ws->write(net::buffer(response));
+    }
+
     if (recipient == "~") {
-        // Chat general: enviar a TODOS los clientes conectados
-        for (auto& [user, status] : users) {
-            if (status == 1 && user != sender) {  // Evitar enviar el mensaje dos veces al mismo cliente
-                ws.write(net::buffer(response));
+        // Chat general: enviar a TODOS los demás clientes conectados
+        for (auto& [user, client] : clients) {
+            if (client.status == 1 && user != sender) {
+                client.ws->write(net::buffer(response));
             }
         }
     } else {
-        if (users.find(recipient) != users.end() && users[recipient] == 1) {
-            // Mensaje privado: enviar solo al destinatario
-            ws.write(net::buffer(response));
+        // Mensaje privado: enviar solo al destinatario
+        if (clients.find(recipient) != clients.end() && clients[recipient].status == 1) {
+            clients[recipient].ws->write(net::buffer(response));
         } else {
             cerr << "⚠️ Usuario no disponible: " << recipient << endl;
         }
     }
-    
 }
-
-void handle_message(const string& sender, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {
+void handle_message(const string& sender, const vector<uint8_t>& data) {
     if (data.empty()) return;
 
     uint8_t messageType = data[0];  // Código del mensaje
 
     switch (messageType) {
         case 1:  // Listar usuarios conectados
-            send_users_list(ws);
+            {
+                lock_guard<mutex> lock(clients_mutex);
+                if (clients.find(sender) != clients.end() && clients[sender].status == 1) {
+                    send_users_list(*clients[sender].ws);
+                }
+            }
             break;
         case 4:  // Enviar mensaje a otro usuario o chat general
-            process_chat_message(sender, data, ws);
+            process_chat_message(sender, data);
             break;
         case 5: // Cargar historial de mensajes
-            get_chat_history(sender, data, ws);
+            {
+                lock_guard<mutex> lock(clients_mutex);
+                if (clients.find(sender) != clients.end() && clients[sender].status == 1) {
+                    get_chat_history(sender, data, *clients[sender].ws);
+                }
+            }
             break;
         default:
             cerr << "⚠️ Mensaje no reconocido: " << (int)messageType << endl;
@@ -152,49 +173,47 @@ void handle_message(const string& sender, const vector<uint8_t>& data, websocket
 
 void do_session(tcp::socket socket) {
     string username;
+    // Crear un shared_ptr para el WebSocket
+    auto ws = std::make_shared<websocket::stream<tcp::socket>>(std::move(socket));
+    
     try {
-        websocket::stream<tcp::socket> ws(move(socket));
         beast::flat_buffer buffer;
         beast::http::request<beast::http::string_body> req;
-        beast::http::read(ws.next_layer(), buffer, req);
+        beast::http::read(ws->next_layer(), buffer, req);
 
         username = extract_username(req);
 
         bool shouldAccept = false;
 
         {
-            lock_guard<mutex> lock(users_mutex);
-            if (users.find(username) == users.end()) {
-                users[username] = 1;
-                cout << "✅ Nuevo usuario conectado: " << username << endl;
-                shouldAccept = true;
-            } else if (users[username] == 0) {
-                users[username] = 1;
-                cout << "✅ Usuario reconectado: " << username << endl;
+            lock_guard<mutex> lock(clients_mutex);
+            if (clients.find(username) == clients.end() || clients[username].status == 0) {
+                clients[username] = {ws, 1};
+                cout << "✅ " << (clients.find(username) == clients.end() ? "Nuevo usuario conectado: " : "Usuario reconectado: ") << username << endl;
                 shouldAccept = true;
             } else {
                 cout << "⚠️ Intento de reconexión fallido para: " << username << endl;
-                ws.close(websocket::close_code::normal);
+                ws->close(websocket::close_code::normal);
                 return;
             }
         }
 
         if (shouldAccept) {  
-            ws.accept(req);  // solo se llama una vez, fuera del lock
+            ws->accept(req);
         }
 
         print_users();
-        send_users_list(ws);  
+        send_users_list(*ws);  
 
         while (true) {
             beast::flat_buffer buffer;
-            ws.read(buffer);
+            ws->read(buffer);
             auto data = buffer.data();
             vector<uint8_t> message_data(boost::asio::buffer_cast<const uint8_t*>(data), 
-                                         boost::asio::buffer_cast<const uint8_t*>(data) + boost::asio::buffer_size(data));
+                                       boost::asio::buffer_cast<const uint8_t*>(data) + boost::asio::buffer_size(data));
 
             if (!message_data.empty()) {
-                handle_message(username, message_data, ws);
+                handle_message(username, message_data);
             }
         }
     } catch (const std::exception& e) {
@@ -203,14 +222,15 @@ void do_session(tcp::socket socket) {
 
     if (!username.empty()) {
         {
-            lock_guard<mutex> lock(users_mutex);
-            users[username] = 0;
+            lock_guard<mutex> lock(clients_mutex);
+            if (clients.find(username) != clients.end()) {
+                clients[username].status = 0;
+            }
         }
         cout << "❌ Usuario desconectado: " << username << endl;
         print_users();
     }
 }
-
 int main() {
     try {
         net::io_context ioc;
