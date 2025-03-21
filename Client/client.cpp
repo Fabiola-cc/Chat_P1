@@ -9,6 +9,7 @@
 #include <QTextEdit>
 #include <iostream>
 #include <QComboBox>
+#include <QNetworkReply>
 #include "MessageHandler.h"
 
 using namespace std;
@@ -83,7 +84,18 @@ public slots:
 
         QString url = QString("ws://%1:%2?name=%3").arg(host, port, username);
         statusLabel->setText("🔄 Conectando a " + url + "...");
+        qDebug() << "URL generada:" << url;
         socket.open(QUrl(url));
+
+        connect(&socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onWebSocketError(QAbstractSocket::SocketError)));
+
+
+    }
+
+    void onWebSocketError(QAbstractSocket::SocketError error) {
+        QString errorString = socket.errorString();
+        qDebug() << "Error WebSocket: " << errorString;
+        statusLabel->setText("❌ Error WebSocket: " + errorString);
     }
 
     void onConnected() {
