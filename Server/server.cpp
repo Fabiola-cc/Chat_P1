@@ -38,14 +38,27 @@ string extract_username(const beast::http::request<beast::http::string_body>& re
     return "Desconocido";
 }
 
-void print_users() {
-    lock_guard<mutex> lock(clients_mutex);
-    cout << "Usuarios disponibles [" << clients.size() << "]: ";
-    for (const auto& [user, client] : clients) {
-        cout << user << ", " << client.status << " |";
+std::string get_status_string(int status) {
+    switch (status) {
+        case 0: return "Desconectado";
+        case 1: return "Activo";
+        case 2: return "Ocupado";
+        case 3: return "Inactivo";
+        default: return "Desconocido";
     }
-    cout << endl;
 }
+
+void print_users() {
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    std::cout << "Usuarios registrados [" << clients.size() << "]: ";
+    for (const auto& [username, session] : clients) {
+        std::cout << username << " (Estado: " << get_status_string(session.status)
+                  << ", WebSocket: " << (session.ws && session.ws->is_open() ? "Abierto" : "Cerrado") 
+                  << ") | ";
+    }
+    std::cout << std::endl;
+}
+
 
 void send_users_list(websocket::stream<tcp::socket>& ws) {
     lock_guard<mutex> lock(clients_mutex);
@@ -179,9 +192,9 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
     if (connection != "Upgrade" || upgrade != "websocket" || key.empty() || version != "13") {
         // Si los encabezados son incorrectos, enviar una respuesta de error
         http::response<http::string_body> res{http::status::bad_request, req.version()};
-        res.body() = "❌ Encabezados WebSocket incorrectos.";
+        res.body() = "Encabezados WebSocket incorrectos.";
         http::write(socket, res);
-        std::cout << "❌ Encabezados WebSocket incorrectos. " << std::endl;
+        std::cout << "Encabezados WebSocket incorrectos. " << std::endl;
         return false; // Indica que la verificación falló
     }
 
@@ -191,7 +204,7 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
 void do_session(net::ip::tcp::socket socket) {
     std::string username;
     auto ws = std::make_shared<websocket::stream<net::ip::tcp::socket>>(std::move(socket));
-
+    bool connectionAccepted = false;  // Indica si la conexión fue aceptada
 
     try {
         beast::flat_buffer buffer;
@@ -204,65 +217,80 @@ void do_session(net::ip::tcp::socket socket) {
 
         // Extraer el nombre de usuario
         username = extract_username(req);
-        bool shouldAccept = false;
 
         {
             std::lock_guard<std::mutex> lock(clients_mutex);
-            if (clients.find(username) == clients.end() || clients[username].status == 0) {
-                clients[username] = {ws, 1};
+            if (username == "~"){
+                http::response<http::string_body> res{http::status::bad_request, req.version()};
+                res.body() = "No se acepta el nombre de usuario: ~";
+                http::write(socket, res);
+                std::cout << "No se acepta el nombre de usuario: " << username << std::endl;
+                return; 
+            }
+            if (clients.find(username) == clients.end()) {
+                // Caso 1: Usuario completamente nuevo
+                clients[username] = {ws, 1};  // Estado: Activo
                 std::cout << "✅ Nuevo usuario conectado: " << username << std::endl;
-                shouldAccept = true;
+                connectionAccepted = true;
+            } else if (clients[username].status == 0) {
+                // Caso 2: Usuario estaba desconectado y se reconecta
+                clients[username] = {ws, 1};  // Estado: Activo
+                std::cout << "🔄 Usuario reconectado: " << username << std::endl;
+                connectionAccepted = true;
             } else {
+                // Usuario ya está conectado, rechazar sin cerrar su sesión
                 http::response<http::string_body> res{http::status::bad_request, req.version()};
                 res.body() = "Usuario ya se encuentra registrado";
                 http::write(socket, res);
-                ws->close(websocket::close_code::normal);  // Cerrar la conexión WebSocket
-                std::cout << "❌ Error: Usuario ya se encuentra registrado " << std::endl;
-                return;
+                std::cout << "❌ Error: Usuario '" << username << "' ya está conectado" << std::endl;
+                return;  // Salir sin cerrar la sesión del usuario original
             }
         }
 
-        // Aceptar la conexión WebSocket si es válido
-        if (shouldAccept) {
+        // Aceptar WebSocket solo si fue permitido
+        if (connectionAccepted) {
             ws->accept(req);
-            cout << "🔗 Cliente conectado\n";
+            std::cout << "🔗 Cliente conectado\n";
+            print_users();
+            send_users_list(*ws);
         }
 
-        // Enviar lista de usuarios y mantener la sesión activa
-        print_users();
-        send_users_list(*ws);
-
-        while (true) {
+        // Mantener la sesión activa
+        while (connectionAccepted) {
             if (!ws->is_open()) {
-                std::cout << "❌ Conexión WebSocket cerrada. Terminando sesión." << std::endl;
+                std::cout << "❌ Conexión WebSocket cerrada por el cliente: " << username << std::endl;
                 break;
             }
 
             beast::flat_buffer buffer;
-            ws->read(buffer);  // Leer mensaje del cliente
+            ws->read(buffer);
 
             auto data = buffer.data();
             std::vector<uint8_t> message_data(boost::asio::buffer_cast<const uint8_t*>(data),
                                               boost::asio::buffer_cast<const uint8_t*>(data) + boost::asio::buffer_size(data));
 
             if (!message_data.empty()) {
-                handle_message(username, message_data);  // Procesar el mensaje
+                handle_message(username, message_data);
             }
         }
     } catch (const boost::system::system_error& e) {
-        // Manejar errores específicos de Boost
         std::cerr << "❌ Error de sistema: " << e.what() << std::endl;
-        if (ws->is_open()) {
-            ws->close(websocket::close_code::normal);  // Cerrar la conexión WebSocket en caso de error
-        }
     } catch (const std::exception& e) {
-        // Manejar otros errores generales
         std::cerr << "❌ Excepción: " << e.what() << std::endl;
-        if (ws->is_open()) {
-            ws->close(websocket::close_code::normal);  // Cerrar la conexión WebSocket en caso de error
+    }
+
+    // Cerrar sesión solo si la conexión fue aceptada
+    if (connectionAccepted) {
+        std::lock_guard<std::mutex> lock(clients_mutex);
+        if (clients.find(username) != clients.end()) {
+            clients[username].status = 0;
+            std::cout << "❌ Usuario desconectado: " << username << " (Estado: Desconectado)" << std::endl;
         }
     }
+
+    print_users();
 }
+
 
 int main() {
     try {

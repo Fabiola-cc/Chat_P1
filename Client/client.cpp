@@ -41,12 +41,15 @@ public:
         sendButton->hide();  // Ocultar al inicio
         userList = new QComboBox(this);  // 🔹 Lista de usuarios
         userList->hide();
+        errorLabel = new QLabel(this);
+        errorLabel->setStyleSheet("color: red; font-weight: bold;");  // Para resaltar errores
 
         layout->addWidget(hostInput);
         layout->addWidget(portInput);
         layout->addWidget(usernameInput);
         layout->addWidget(connectButton);
         layout->addWidget(statusLabel);
+        layout->addWidget(errorLabel); 
         layout->addWidget(chatArea);  // Añadir área de chat
         layout->addWidget(userList);
         layout->addWidget(messageInput);
@@ -58,7 +61,6 @@ public:
         connect(connectButton, &QPushButton::clicked, this, &ChatClient::connectToServer);
         connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);
         connect(&socket, &QWebSocket::disconnected, this, &ChatClient::onDisconnected);
-        connect(&socket, &QWebSocket::textMessageReceived, this, &ChatClient::onMessageReceived);
 
         connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);  // 🔹 Llamar cuando se selecciona un usuario
 
@@ -72,6 +74,7 @@ public:
     }
 
 public slots:
+
     void connectToServer() {
         QString host = hostInput->text();
         QString port = portInput->text();
@@ -84,18 +87,49 @@ public slots:
 
         QString url = QString("ws://%1:%2?name=%3").arg(host, port, username);
         statusLabel->setText("🔄 Conectando a " + url + "...");
-        qDebug() << "URL generada:" << url;
+        
         socket.open(QUrl(url));
 
-        connect(&socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(onWebSocketError(QAbstractSocket::SocketError)));
+    }
+   
 
+    void onHttpErrorResponse(const QString &message) {
+        // Mostrar el mensaje sin caracteres no deseados
+        QString cleanedMessage = message;
+        cleanedMessage.replace(QRegExp("[\\x00-\\x1F]"), "");  // Elimina caracteres de control
+    
+        // Muestra el mensaje limpio
+        errorLabel->setText("Error del servidor: " + cleanedMessage);
+        qDebug() << "Mensaje de error recibido:" << cleanedMessage;
+    }
+    
 
+    void onDisconnected() {
+        statusLabel->setText("Se ha desconectado de la sesión.");
+    
+        hostInput->show();
+        portInput->show();
+        usernameInput->show();
+        connectButton->show();
+        errorLabel->show();
+    
+        chatArea->hide();
+        userList->hide();
+        messageInput->hide();
+        sendButton->hide();
+
+        connect(&socket, &QWebSocket::textMessageReceived, this, &ChatClient::onHttpErrorResponse);
     }
 
     void onWebSocketError(QAbstractSocket::SocketError error) {
-        QString errorString = socket.errorString();
-        qDebug() << "Error WebSocket: " << errorString;
-        statusLabel->setText("❌ Error WebSocket: " + errorString);
+        Q_UNUSED(error);
+        
+        // Obtener mensaje de error
+        QString errorMsg = socket.errorString();
+        
+        // Mostrar solo en errorLabel, sin modificar el estado de conexión
+        errorLabel->setText("Error: " + errorMsg);
+        qDebug() << "Error en WebSocket:" << errorMsg;
     }
 
     void onConnected() {
@@ -120,16 +154,9 @@ public slots:
         messageHandler->requestChatHistory("~");
     }    
 
-    void onDisconnected() {
-        statusLabel->setText("❌ Desconectado.");
-    }
 
     void attemptReconnect() {
         connectToServer();
-    }
-
-    void onMessageReceived(const QString &message) {
-        // chatArea->append("💬 " + message);
     }
 
     void onUserSelected() {
@@ -142,6 +169,7 @@ public slots:
 private:
     QWebSocket socket;
     QLabel *statusLabel;
+    QLabel *errorLabel;
     QTimer *reconnectTimer;
     QLineEdit *hostInput;
     QLineEdit *portInput;
