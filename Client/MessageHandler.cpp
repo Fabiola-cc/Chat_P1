@@ -1,21 +1,48 @@
 #include "MessageHandler.h"
 
-MessageHandler::MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton* button, QTextEdit* chatArea, QComboBox* userList, QObject* parent)
-    : QObject(parent), socket(socket), messageInput(input), sendButton(button), chatArea(chatArea), userList(userList) {
+MessageHandler::MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton* button, 
+                               QTextEdit* chatArea, QComboBox* userList, QComboBox* stateList,  QLineEdit* usernameInput,  QObject* parent)
+    : QObject(parent), socket(socket), messageInput(input), sendButton(button), 
+      chatArea(chatArea), userList(userList), stateList(stateList), usernameInput(usernameInput) {  
     
     connect(sendButton, &QPushButton::clicked, this, &MessageHandler::sendMessage);
     connect(&socket, &QWebSocket::textMessageReceived, this, &MessageHandler::receiveMessage);
+    connect(stateList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MessageHandler::onStateChanged);  // 🔹 Conectar cambios de estado
 }
 
 void MessageHandler::requestChatHistory(const QString& chatName) {
     if (chatName.isEmpty()) return;
 
     QByteArray request;
-    request.append(static_cast<char>(5));  // Código para obtener historial
+    request.append(static_cast<char>(5));  
     request.append(static_cast<char>(chatName.length()));
     request.append(chatName.toUtf8());
 
     socket.sendBinaryMessage(request);
+}
+
+void MessageHandler::requestChangeState(const QString& username, uint8_t newStatus) {
+    if (username.isEmpty()) return;
+
+    QByteArray request;
+    request.append(static_cast<char>(3));  
+    request.append(static_cast<char>(username.length()));
+    request.append(username.toUtf8());
+    request.append(static_cast<char>(newStatus));
+
+    socket.sendBinaryMessage(request);
+}
+
+// 🔹 Cuando cambia el estado, enviamos la actualización al servidor
+void MessageHandler::onStateChanged(int index) {
+    if (!stateList) return;
+
+    uint8_t newStatus = static_cast<uint8_t>(stateList->itemData(index).toInt());
+    QString username = usernameInput->text().trimmed();  
+
+    if (!username.isEmpty()) {
+        requestChangeState(username, newStatus);
+    }
 }
 
 void MessageHandler::sendMessage() {
@@ -25,28 +52,27 @@ void MessageHandler::sendMessage() {
         return;
     }
 
-    QString recipient = userList->currentText();  //  Obtener usuario seleccionado
-    if (recipient == "General") recipient = "~";  //  Si no hay usuario, usar el chat general
+    QString recipient = userList->currentText();
+    if (recipient == "General") recipient = "~";
 
-    QByteArray formattedMessage = buildMessage(4, recipient, message);  // Código 4 = Mensaje al chat general
+    QByteArray formattedMessage = buildMessage(4, recipient, message);
     socket.sendBinaryMessage(formattedMessage);
 
     messageInput->clear();
 }
 
-// Construye un mensaje binario según el protocolo
 QByteArray MessageHandler::buildMessage(quint8 type, const QString& param1, const QString& param2) {
     QByteArray message;
-    message.append(static_cast<char>(type));  // Código del mensaje
+    message.append(static_cast<char>(type));
 
     if (!param1.isEmpty()) {
-        message.append(static_cast<char>(param1.length()));  // Longitud del primer campo
-        message.append(param1.toUtf8());  // Contenido del primer campo
+        message.append(static_cast<char>(param1.length()));
+        message.append(param1.toUtf8());
     }
 
     if (!param2.isEmpty()) {
-        message.append(static_cast<char>(param2.length()));  // Longitud del segundo campo
-        message.append(param2.toUtf8());  // Contenido del segundo campo
+        message.append(static_cast<char>(param2.length()));
+        message.append(param2.toUtf8());
     }
 
     return message;
@@ -58,12 +84,11 @@ void MessageHandler::receiveMessage(const QString& message) {
 
     quint8 messageType = static_cast<quint8>(data[0]);
 
-    if (messageType == 51) {  // Respuesta con lista de usuarios
-        userList->clear();  // Vaciar antes de agregar nuevos usuarios
-
+    if (messageType == 51) {  // Lista de usuarios con estados
+        userList->clear();
         quint8 numUsers = static_cast<quint8>(data[1]);
         int pos = 2;
-        userList->addItem(QString("General"));
+        userList->addItem("General");
 
         for (quint8 i = 0; i < numUsers; i++) {
             quint8 usernameLen = static_cast<quint8>(data[pos]);
@@ -73,10 +98,18 @@ void MessageHandler::receiveMessage(const QString& message) {
             quint8 status = static_cast<quint8>(data[pos]);
             pos += 1;
 
-            userList->addItem(username);  // Agregar usuarios al QComboBox
+            userList->addItem(username);
+            
+            // 🔹 Si este usuario es el actual, actualizar su estado en el combo
+            if (username == userList->currentText()) {
+                int stateIndex = stateList->findData(status);
+                if (stateIndex != -1) {
+                    stateList->setCurrentIndex(stateIndex);
+                }
+            }
         }
     } 
-    else if (messageType == 55) {  // Mensaje recibido normal
+    else if (messageType == 55) {  // Mensaje normal
         quint8 usernameLen = static_cast<quint8>(data[1]);
         QString username = QString::fromUtf8(data.mid(2, usernameLen));
         quint8 messageLen = static_cast<quint8>(data[2 + usernameLen]);
@@ -84,9 +117,8 @@ void MessageHandler::receiveMessage(const QString& message) {
         
         chatArea->append("💬 " + username + ": " + content);
     } 
-    else if (messageType == 56) {  // Respuesta de historial de chat
-        chatArea->clear();  //  Limpiar chat antes de mostrar historial
-
+    else if (messageType == 56) {  // Historial de chat
+        chatArea->clear();
         quint8 numMessages = static_cast<quint8>(data[1]);
         int pos = 2;
         

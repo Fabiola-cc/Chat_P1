@@ -30,6 +30,8 @@ public:
         connectButton = new QPushButton("Conectar", this);
 
         statusLabel = new QLabel("🔹 Introduce los datos y presiona conectar.", this);
+        errorLabel = new QLabel(this);
+        errorLabel->setStyleSheet("color: red; font-weight: bold;");  // Para resaltar errores
 
         // Área de chat (inicialmente oculta)
         chatArea = new QTextEdit(this);
@@ -41,8 +43,12 @@ public:
         sendButton->hide();  // Ocultar al inicio
         userList = new QComboBox(this);  // 🔹 Lista de usuarios
         userList->hide();
-        errorLabel = new QLabel(this);
-        errorLabel->setStyleSheet("color: red; font-weight: bold;");  // Para resaltar errores
+       
+        statusDropdown = new QComboBox(this);
+        statusDropdown->addItem("Activo", 1);
+        statusDropdown->addItem("Inactivo", 2);
+        statusDropdown->addItem("Ocupado", 3);
+        statusDropdown->setEnabled(false);
 
         layout->addWidget(hostInput);
         layout->addWidget(portInput);
@@ -50,6 +56,7 @@ public:
         layout->addWidget(connectButton);
         layout->addWidget(statusLabel);
         layout->addWidget(errorLabel); 
+        layout->addWidget(statusDropdown);
         layout->addWidget(chatArea);  // Añadir área de chat
         layout->addWidget(userList);
         layout->addWidget(messageInput);
@@ -65,7 +72,7 @@ public:
         connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);  // 🔹 Llamar cuando se selecciona un usuario
 
         // Crear el manejador de mensajes
-        messageHandler = new MessageHandler(socket, messageInput, sendButton, chatArea, userList, this);
+        messageHandler = new MessageHandler(socket, messageInput, sendButton, chatArea, userList, statusDropdown, usernameInput, this);
 
         // Temporizador de reconexión
         reconnectTimer = new QTimer(this);
@@ -81,26 +88,57 @@ public slots:
         QString username = usernameInput->text();
 
         if (host.isEmpty() || port.isEmpty() || username.isEmpty()) {
-            statusLabel->setText("⚠️ Todos los campos son obligatorios.");
+            statusLabel->setText(" Todos los campos son obligatorios.");
             return;
         }
 
+        // Crear la URL del WebSocket
         QString url = QString("ws://%1:%2?name=%3").arg(host, port, username);
         statusLabel->setText("🔄 Conectando a " + url + "...");
-        
+
+        // Imprimir la URL para asegurarnos de que está bien formada
+        qDebug() << "Conectando a la URL: " << url;
+
+        // Conectar la señal de conexión exitosa
+        connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);
+        // Conectar la señal de error
+        connect(&socket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
+            this, &ChatClient::onSocketError);
+
+        // Intentar abrir la conexión WebSocket
         socket.open(QUrl(url));
-
     }
-   
 
-    void onHttpErrorResponse(const QString &message) {
-        // Mostrar el mensaje sin caracteres no deseados
-        QString cleanedMessage = message;
-        cleanedMessage.replace(QRegExp("[\\x00-\\x1F]"), "");  // Elimina caracteres de control
-    
-        // Muestra el mensaje limpio
-        errorLabel->setText("Error del servidor: " + cleanedMessage);
-        qDebug() << "Mensaje de error recibido:" << cleanedMessage;
+
+    void onSocketError(QAbstractSocket::SocketError error) {
+        QString errorMessage;
+        switch (error) {
+            case QAbstractSocket::HostNotFoundError:
+                errorMessage = "Host no encontrado. Verifica la dirección del servidor.";
+                break;
+            case QAbstractSocket::ConnectionRefusedError:
+                errorMessage = "Conexión rechazada por el servidor. Puede que el servidor no esté disponible.";
+                break;
+            case QAbstractSocket::RemoteHostClosedError:
+                errorMessage = "El host remoto cerró la conexión.";
+                break;
+            case QAbstractSocket::SocketAccessError:
+                errorMessage = "Acceso denegado al socket.";
+                break;
+            case QAbstractSocket::SocketResourceError:
+                errorMessage = "Recursos insuficientes para establecer la conexión.";
+                break;
+            case QAbstractSocket::SocketTimeoutError:
+                errorMessage = "Tiempo de espera agotado.";
+                break;
+            default:
+                errorMessage = "Error: " + socket.errorString();
+                break;
+        }
+        
+        qDebug() << "Error de conexión WebSocket: " << errorMessage;
+        // Mostrar mensaje de error
+        statusLabel->setText("❌ Error: " + errorMessage);
     }
     
 
@@ -118,7 +156,6 @@ public slots:
         messageInput->hide();
         sendButton->hide();
 
-        connect(&socket, &QWebSocket::textMessageReceived, this, &ChatClient::onHttpErrorResponse);
     }
 
     void onWebSocketError(QAbstractSocket::SocketError error) {
@@ -133,8 +170,9 @@ public slots:
     }
 
     void onConnected() {
-        statusLabel->setText("✅ Conectado al servidor WebSocket!");
+        statusLabel->setText("Conectado al Chat");
         reconnectTimer->stop();
+        statusDropdown->setEnabled(true);
     
         // Ocultar los inputs de conexión
         hostInput->hide();
@@ -148,7 +186,7 @@ public slots:
         messageInput->show();
         sendButton->show();
     
-        chatArea->append("🟢 Conectado al chat!");
+        chatArea->append("Conectado al chat!");
 
         // 🔹 Solicitar historial del chat general (~)
         messageHandler->requestChatHistory("~");
@@ -179,6 +217,7 @@ private:
     QLineEdit *messageInput;
     QPushButton *sendButton;
     QComboBox *userList;
+    QComboBox *statusDropdown;
     MessageHandler *messageHandler;
 };
 

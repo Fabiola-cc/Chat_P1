@@ -76,6 +76,39 @@ void send_users_list(websocket::stream<tcp::socket>& ws) {
     ws.write(net::buffer(response));
 }
 
+void change_state(const vector<uint8_t>& data) {
+    if (data.size() < 3) {
+        std::cerr << "❌ Error: Mensaje demasiado corto para cambiar estado." << std::endl;
+        return;
+    }
+
+    uint8_t username_len = data[1];
+
+    if (username_len + 2 > data.size()) {
+        std::cerr << "❌ Error: El tamaño del nombre de usuario es incorrecto." << std::endl;
+        return;
+    }
+
+    // Obtener el nombre de usuario
+    std::string received_username(reinterpret_cast<const char*>(&data[2]), username_len);
+
+    // El último byte es el nuevo estado
+    uint8_t new_status = data[2 + username_len];
+
+    // Cambiar el estado del usuario
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    auto it = clients.find(received_username);
+    if (it != clients.end()) {
+        // Cambiar el estado del usuario
+        it->second.status = new_status;
+        std::cout << "✅ El usuario " << received_username << " cambió su estado a " 
+                  << static_cast<int>(new_status) << std::endl;
+    } else {
+        std::cerr << "❌ Error: Usuario no encontrado." << std::endl;
+    }
+}
+
+
 void get_chat_history(const string& requester, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {
     if (data.size() < 2) return;
 
@@ -165,6 +198,9 @@ void handle_message(const string& sender, const vector<uint8_t>& data) {
                 }
             }
             break;
+        case 3:
+            change_state(data);
+            break;
         case 4:
             process_chat_message(sender, data);
             break;
@@ -204,29 +240,37 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
 void do_session(net::ip::tcp::socket socket) {
     std::string username;
     auto ws = std::make_shared<websocket::stream<net::ip::tcp::socket>>(std::move(socket));
-    bool connectionAccepted = false;  // Indica si la conexión fue aceptada
+    bool connectionAccepted = false;
 
     try {
         beast::flat_buffer buffer;
         http::request<http::string_body> req;
-        http::read(ws->next_layer(), buffer, req);
+        http::read(ws->next_layer(), buffer, req);  // Lee la solicitud HTTP del cliente
 
+        // Verificar los encabezados del WebSocket
         if (!verificarEncabezadosWebSocket(req, socket)) {
-            return;
+            // Si los encabezados no son válidos, responder con error HTTP 400
+            http::response<http::string_body> res{http::status::bad_request, req.version()};
+            res.body() = "Solicitud HTTP incorrecta.";
+            http::write(socket, res);  // Escribir respuesta HTTP
+            return;  // Salir después de enviar la respuesta
         }
 
         // Extraer el nombre de usuario
         username = extract_username(req);
 
+        // Bloqueo para evitar condiciones de carrera
         {
             std::lock_guard<std::mutex> lock(clients_mutex);
-            if (username == "~"){
+
+            if (username == "~") {
+                // Rechazar el nombre de usuario "~"
                 http::response<http::string_body> res{http::status::bad_request, req.version()};
                 res.body() = "No se acepta el nombre de usuario: ~";
-                http::write(socket, res);
-                std::cout << "No se acepta el nombre de usuario: " << username << std::endl;
-                return; 
+                http::write(socket, res);  // Escribir respuesta HTTP
+                return;  // Salir después de rechazar la solicitud
             }
+
             if (clients.find(username) == clients.end()) {
                 // Caso 1: Usuario completamente nuevo
                 clients[username] = {ws, 1};  // Estado: Activo
@@ -238,17 +282,17 @@ void do_session(net::ip::tcp::socket socket) {
                 std::cout << "🔄 Usuario reconectado: " << username << std::endl;
                 connectionAccepted = true;
             } else {
-                // Usuario ya está conectado, rechazar sin cerrar su sesión
+                // Usuario ya conectado, rechazar
                 http::response<http::string_body> res{http::status::bad_request, req.version()};
-                res.body() = "Usuario ya se encuentra registrado";
-                http::write(socket, res);
-                std::cout << "❌ Error: Usuario '" << username << "' ya está conectado" << std::endl;
-                return;  // Salir sin cerrar la sesión del usuario original
+                res.body() = "Usuario ya está conectado";
+                http::write(socket, res);  // Escribir respuesta HTTP
+                return;  // Salir después de rechazar la solicitud
             }
         }
 
         // Aceptar WebSocket solo si fue permitido
         if (connectionAccepted) {
+            // Aceptar la conexión WebSocket
             ws->accept(req);
             std::cout << "🔗 Cliente conectado\n";
             print_users();
@@ -263,14 +307,14 @@ void do_session(net::ip::tcp::socket socket) {
             }
 
             beast::flat_buffer buffer;
-            ws->read(buffer);
+            ws->read(buffer);  // Leer datos del cliente WebSocket
 
             auto data = buffer.data();
             std::vector<uint8_t> message_data(boost::asio::buffer_cast<const uint8_t*>(data),
                                               boost::asio::buffer_cast<const uint8_t*>(data) + boost::asio::buffer_size(data));
 
             if (!message_data.empty()) {
-                handle_message(username, message_data);
+                handle_message(username, message_data);  // Procesar el mensaje
             }
         }
     } catch (const boost::system::system_error& e) {
@@ -288,8 +332,10 @@ void do_session(net::ip::tcp::socket socket) {
         }
     }
 
-    print_users();
+    print_users();  // Imprimir lista de usuarios actualizada
 }
+
+
 
 
 int main() {
@@ -301,8 +347,6 @@ int main() {
         while (true) {
             tcp::socket socket(ioc);
             acceptor.accept(socket);
-           
-
             // Manejar la sesión en un hilo separado
             thread{do_session, move(socket)}.detach();
         }
