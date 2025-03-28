@@ -20,6 +20,7 @@ using namespace std;
 struct ClientSession {
     std::shared_ptr<websocket::stream<tcp::socket>> ws;
     int status;
+    std::string ipAddress;
 };
 
 std::unordered_map<std::string, ClientSession> clients;
@@ -242,6 +243,8 @@ void do_session(net::ip::tcp::socket socket) {
     auto ws = std::make_shared<websocket::stream<net::ip::tcp::socket>>(std::move(socket));
     bool connectionAccepted = false;
 
+    std::string clientIP = ws->next_layer().remote_endpoint().address().to_string();
+
     try {
         beast::flat_buffer buffer;
         http::request<http::string_body> req;
@@ -273,13 +276,13 @@ void do_session(net::ip::tcp::socket socket) {
 
             if (clients.find(username) == clients.end()) {
                 // Caso 1: Usuario completamente nuevo
-                clients[username] = {ws, 1};  // Estado: Activo
-                std::cout << "✅ Nuevo usuario conectado: " << username << std::endl;
+                clients[username] = {ws, 1, clientIP};  // Estado: Activo
+                std::cout << "✅ Nuevo usuario conectado: " << username<< " desde " << clientIP  << std::endl;
                 connectionAccepted = true;
             } else if (clients[username].status == 0) {
                 // Caso 2: Usuario estaba desconectado y se reconecta
                 clients[username] = {ws, 1};  // Estado: Activo
-                std::cout << "🔄 Usuario reconectado: " << username << std::endl;
+                std::cout << "🔄 Usuario reconectado: " << username << " desde " << clientIP << std::endl;
                 connectionAccepted = true;
             } else {
                 // Usuario ya conectado, rechazar
