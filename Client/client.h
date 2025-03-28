@@ -1,6 +1,7 @@
 #ifndef WEBSOCKETCLIENT_H
 #define WEBSOCKETCLIENT_H
 
+#include "OptionsDialog.h"
 #include <QApplication>
 #include <QWebSocket>
 #include <QLabel>
@@ -29,9 +30,11 @@ private:
     QComboBox *userList;  // 🔹 Nuevo dropdown para seleccionar usuarios
     QTimer *reconnectTimer;
     MessageHandler *messageHandler;
+    QPushButton *optionsButton;
 
 private slots:
     void onUserSelected();  // 🔹 Nueva función para cargar historial al seleccionar usuario
+    void showOptionsDialog();
 };
 
 #endif // ChatClient_H

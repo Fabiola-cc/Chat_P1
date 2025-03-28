@@ -11,6 +11,7 @@
 #include <QComboBox>
 #include <QNetworkReply>
 #include "MessageHandler.h"
+#include "OptionsDialog.h"
 
 using namespace std;
 
@@ -28,6 +29,8 @@ public:
         portInput = new QLineEdit("8080", this);
         usernameInput = new QLineEdit("Usuario", this);
         connectButton = new QPushButton("Conectar", this);
+        optionsButton = new QPushButton("Opciones", this);
+
 
         statusLabel = new QLabel("🔹 Introduce los datos y presiona conectar.", this);
         errorLabel = new QLabel(this);
@@ -43,6 +46,7 @@ public:
         sendButton->hide();  // Ocultar al inicio
         userList = new QComboBox(this);  // 🔹 Lista de usuarios
         userList->hide();
+        optionsButton->hide();
        
         statusDropdown = new QComboBox(this);
         statusDropdown->addItem("Activo", 1);
@@ -61,6 +65,7 @@ public:
         layout->addWidget(userList);
         layout->addWidget(messageInput);
         layout->addWidget(sendButton);
+        layout->addWidget(optionsButton);
 
         setLayout(layout);
 
@@ -68,6 +73,8 @@ public:
         connect(connectButton, &QPushButton::clicked, this, &ChatClient::connectToServer);
         connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);
         connect(&socket, &QWebSocket::disconnected, this, &ChatClient::onDisconnected);
+        connect(optionsButton, &QPushButton::clicked, this, &ChatClient::showOptionsDialog);
+
 
         connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);  // 🔹 Llamar cuando se selecciona un usuario
 
@@ -155,6 +162,8 @@ public slots:
         userList->hide();
         messageInput->hide();
         sendButton->hide();
+        optionsButton->hide();
+
 
     }
 
@@ -185,6 +194,8 @@ public slots:
         userList->show();
         messageInput->show();
         sendButton->show();
+        optionsButton->show();
+
     
         chatArea->append("Conectado al chat!");
 
@@ -204,6 +215,16 @@ public slots:
         }
     }
 
+    void showOptionsDialog() {
+        OptionsDialog *dialog = new OptionsDialog(this);
+    
+        // Configuramos el diálogo para que se auto-destruya cuando se cierre
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        
+        // Mostramos el diálogo de forma no-modal
+        dialog->show();
+    }
+
 private:
     QWebSocket socket;
     QLabel *statusLabel;
@@ -213,6 +234,7 @@ private:
     QLineEdit *portInput;
     QLineEdit *usernameInput;
     QPushButton *connectButton;
+    QPushButton *optionsButton;
     QTextEdit *chatArea;
     QLineEdit *messageInput;
     QPushButton *sendButton;
