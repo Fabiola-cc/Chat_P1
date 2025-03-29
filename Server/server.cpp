@@ -219,6 +219,30 @@ void handle_message(const string& sender, const vector<uint8_t>& data) {
     }
 }
 
+void broadcast_new_user(const std::string& username) {
+    std::vector<uint8_t> message;
+
+    message.push_back(53);  // Tipo: Nuevo usuario (1 byte)
+    message.push_back(static_cast<uint8_t>(username.size()));  // Len Username (1 byte)
+
+    // Agregar el nombre de usuario
+    message.insert(message.end(), username.begin(), username.end());
+
+    message.push_back(1);  // Status: Activo (1 byte)
+
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    for (auto& [user, client] : clients) {
+        if (client.status == 1 && client.ws && client.ws->is_open()) {
+            try {
+                client.ws->write(net::buffer(message));
+            } catch (const boost::system::system_error& e) {
+                std::cerr << "⚠️ No se pudo enviar mensaje a " << user << ": " << e.what() << std::endl;
+            }
+        }
+    }
+}
+
+
 bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, tcp::socket& socket) {
     // Verificar encabezados WebSocket
     auto connection = req[http::field::connection];
@@ -299,6 +323,7 @@ void do_session(net::ip::tcp::socket socket) {
             ws->accept(req);
             std::cout << "🔗 Cliente conectado\n";
             print_users();
+            broadcast_new_user(username);
             send_users_list(*ws);
         }
 

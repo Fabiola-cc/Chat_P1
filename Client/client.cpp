@@ -32,7 +32,7 @@ public:
         optionsButton = new QPushButton("Opciones", this);
 
 
-        statusLabel = new QLabel("🔹 Introduce los datos y presiona conectar.", this);
+        statusLabel = new QLabel("Introduce los datos y presiona conectar.", this);
         errorLabel = new QLabel(this);
         errorLabel->setStyleSheet("color: red; font-weight: bold;");  // Para resaltar errores
 
@@ -45,6 +45,7 @@ public:
         sendButton = new QPushButton("Enviar", this);
         sendButton->hide();  // Ocultar al inicio
         userList = new QComboBox(this);  // 🔹 Lista de usuarios
+        userList->addItem("General");
         userList->hide();
         optionsButton->hide();
        
@@ -53,6 +54,7 @@ public:
         statusDropdown->addItem("Inactivo", 2);
         statusDropdown->addItem("Ocupado", 3);
         statusDropdown->setEnabled(false);
+        statusDropdown->hide();
 
         layout->addWidget(hostInput);
         layout->addWidget(portInput);
@@ -195,6 +197,7 @@ public slots:
         messageInput->show();
         sendButton->show();
         optionsButton->show();
+        statusDropdown->show();
 
     
         chatArea->append("Conectado al chat!");

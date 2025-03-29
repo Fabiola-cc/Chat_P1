@@ -33,7 +33,6 @@ void MessageHandler::requestChangeState(const QString& username, uint8_t newStat
     socket.sendBinaryMessage(request);
 }
 
-// 🔹 Cuando cambia el estado, enviamos la actualización al servidor
 void MessageHandler::onStateChanged(int index) {
     if (!stateList) return;
 
@@ -109,6 +108,17 @@ void MessageHandler::receiveMessage(const QString& message) {
             }
         }
     } 
+    //else if (messageType == 52) {
+      // break;
+    //}
+    else if (messageType == 53) {
+        quint8 usernameLen = static_cast<quint8>(data[1]);
+        QString username = QString::fromUtf8(data.mid(2, usernameLen));
+        userList->addItem(username);
+    }
+    //else if (messageType == 54) {
+      //  break;
+    //}
     else if (messageType == 55) {  // Mensaje normal
         quint8 usernameLen = static_cast<quint8>(data[1]);
         QString username = QString::fromUtf8(data.mid(2, usernameLen));
