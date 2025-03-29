@@ -221,6 +221,9 @@ public slots:
     void showOptionsDialog() {
         OptionsDialog *dialog = new OptionsDialog(this);
     
+        // Pasar la lista de usuarios al diálogo
+        dialog->setUserList(userList);
+        
         // Configuramos el diálogo para que se auto-destruya cuando se cierre
         dialog->setAttribute(Qt::WA_DeleteOnClose);
         
