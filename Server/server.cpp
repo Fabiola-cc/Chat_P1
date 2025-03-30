@@ -77,7 +77,9 @@ void send_users_list(websocket::stream<tcp::socket>& ws) {
     ws.write(net::buffer(response));
 }
 
-void change_state(const vector<uint8_t>& data) {
+void change_state(const std::vector<uint8_t>& data) {
+    std::vector<uint8_t> message;
+
     if (data.size() < 3) {
         std::cerr << "❌ Error: Mensaje demasiado corto para cambiar estado." << std::endl;
         return;
@@ -100,14 +102,27 @@ void change_state(const vector<uint8_t>& data) {
     std::lock_guard<std::mutex> lock(clients_mutex);
     auto it = clients.find(received_username);
     if (it != clients.end()) {
-        // Cambiar el estado del usuario
         it->second.status = new_status;
         std::cout << "✅ El usuario " << received_username << " cambió su estado a " 
                   << static_cast<int>(new_status) << std::endl;
+
+        // Construir el mensaje para el cambio de estado
+        message.push_back(54);  // Tipo de mensaje (ajustar según sea necesario)
+        message.push_back(static_cast<uint8_t>(received_username.size()));  // Longitud del nombre de usuario
+        message.insert(message.end(), received_username.begin(), received_username.end());  // Nombre de usuario
+        message.push_back(new_status);  // Nuevo estado
+
+        // Enviar el mensaje a todos los clientes conectados
+        for (auto& client : clients) {
+            if (client.second.ws->is_open()) {
+                client.second.ws->write(net::buffer(message));  // Enviar el mensaje
+            }
+        }
     } else {
         std::cerr << "❌ Error: Usuario no encontrado." << std::endl;
     }
 }
+
 
 
 void get_chat_history(const string& requester, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {

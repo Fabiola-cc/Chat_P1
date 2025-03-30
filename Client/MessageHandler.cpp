@@ -1,4 +1,6 @@
 #include "MessageHandler.h"
+#include <iostream>
+
 
 MessageHandler::MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton* button, 
                                QTextEdit* chatArea, QComboBox* userList, QComboBox* stateList,  QLineEdit* usernameInput,  QObject* parent)
@@ -8,6 +10,16 @@ MessageHandler::MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton
     connect(sendButton, &QPushButton::clicked, this, &MessageHandler::sendMessage);
     connect(&socket, &QWebSocket::textMessageReceived, this, &MessageHandler::receiveMessage);
     connect(stateList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MessageHandler::onStateChanged);  // 🔹 Conectar cambios de estado
+}
+
+std::string get_status_string(int status) {
+    switch (status) {
+        case 0: return "Desconectado";
+        case 1: return "Activo";
+        case 2: return "Ocupado";
+        case 3: return "Inactivo";
+        default: return "Desconocido";
+    }
 }
 
 void MessageHandler::requestChatHistory(const QString& chatName) {
@@ -116,9 +128,13 @@ void MessageHandler::receiveMessage(const QString& message) {
         QString username = QString::fromUtf8(data.mid(2, usernameLen));
         userList->addItem(username);
     }
-    //else if (messageType == 54) {
-      //  break;
-    //}
+    else if (messageType == 54) {
+        quint8 usernameLen = static_cast<quint8>(data[1]);
+        QString username = QString::fromUtf8(data.mid(2, usernameLen));
+        quint8 newStatus = static_cast<quint8>(data[2 + usernameLen]);
+        
+        chatArea->append("**" + username + " ha cambiado su estado a " + QString::fromStdString(get_status_string(newStatus)) + "**");
+    }
     else if (messageType == 55) {  // Mensaje normal
         quint8 usernameLen = static_cast<quint8>(data[1]);
         QString username = QString::fromUtf8(data.mid(2, usernameLen));

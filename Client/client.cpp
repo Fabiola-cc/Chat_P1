@@ -51,8 +51,8 @@ public:
        
         statusDropdown = new QComboBox(this);
         statusDropdown->addItem("Activo", 1);
-        statusDropdown->addItem("Inactivo", 2);
-        statusDropdown->addItem("Ocupado", 3);
+        statusDropdown->addItem("Ocupado", 2);
+        statusDropdown->addItem("Inactivo", 3);
         statusDropdown->setEnabled(false);
         statusDropdown->hide();
 
