@@ -1,6 +1,8 @@
 #include "MessageHandler.h"
 #include <iostream>
+#include <stdexcept>
 
+using namespace std;
 
 MessageHandler::MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton* button, 
                                QTextEdit* chatArea, QComboBox* userList, QComboBox* stateList,  QLineEdit* usernameInput,  QObject* parent)
@@ -9,7 +11,7 @@ MessageHandler::MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton
     
     connect(sendButton, &QPushButton::clicked, this, &MessageHandler::sendMessage);
     connect(&socket, &QWebSocket::textMessageReceived, this, &MessageHandler::receiveMessage);
-    connect(stateList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MessageHandler::onStateChanged);  // 🔹 Conectar cambios de estado
+    connect(stateList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MessageHandler::onStateChanged);  // Conectar cambios de estado
 }
 
 std::string get_status_string(int status) {
@@ -22,7 +24,15 @@ std::string get_status_string(int status) {
     }
 }
 
-
+std::string get_error_string(int error) {
+    switch (error) {
+        case 1: return "El usuario que intentas obtener no existe.";
+        case 2: return "El estatus enviado es inválido.";
+        case 3: return "¡El mensaje está vacío!";
+        case 4: return "El mensaje fue enviado a un usuario con estatus desconectado";
+        default: return "Desconocido";
+    }
+}
 
 void MessageHandler::setUserInfoCallback(std::function<void(const QString&, int)> callback) {
     m_userInfoCallback = callback;
@@ -76,7 +86,11 @@ void MessageHandler::onStateChanged(int index) {
 void MessageHandler::sendMessage() {
     QString message = messageInput->text().trimmed();
     if (message.isEmpty() || message.length() > 255) {
-        chatArea->append("!! Mensaje inválido (vacío o muy largo)");
+        chatArea->append("!! Mensaje vacío");
+        return;
+    }
+    if (message.length() > 255) {
+        chatArea->append("!! Mensaje inválido (demasiado largo)");
         return;
     }
 
@@ -112,7 +126,12 @@ void MessageHandler::receiveMessage(const QString& message) {
 
     quint8 messageType = static_cast<quint8>(data[0]);
 
-    if (messageType == 51) {  // Lista de usuarios con estados
+    if (messageType == 50){ // ERROR
+        quint8 errorType = static_cast<quint8>(data[1]);
+        cerr << "⚠️ " + get_error_string(errorType) << endl;
+        chatArea->append(QString::fromStdString(get_error_string(errorType)));
+    }
+    else if (messageType == 51) {  // Lista de usuarios con estados
         userList->clear();
         quint8 numUsers = static_cast<quint8>(data[1]);
         int pos = 2;
@@ -128,7 +147,7 @@ void MessageHandler::receiveMessage(const QString& message) {
 
             userList->addItem(username);
             
-            // 🔹 Si este usuario es el actual, actualizar su estado en el combo
+            // Si este usuario es el actual, actualizar su estado en el combo
             if (username == userList->currentText()) {
                 int stateIndex = stateList->findData(status);
                 if (stateIndex != -1) {
@@ -151,10 +170,10 @@ void MessageHandler::receiveMessage(const QString& message) {
             }
             
             // También se puede mostrar un mensaje en el chat
-            chatArea->append("ℹ️ Información de usuario: " + username + 
+            chatArea->append("Información de usuario: " + username + 
                              " - Estado: " + QString::fromStdString(get_status_string(status)));
         } else {
-            chatArea->append("⚠️ No se encontró información del usuario solicitado");
+            chatArea->append("No se encontró información del usuario solicitado");
         }
     }
     else if (messageType == 53) {
@@ -175,7 +194,7 @@ void MessageHandler::receiveMessage(const QString& message) {
         quint8 messageLen = static_cast<quint8>(data[2 + usernameLen]);
         QString content = QString::fromUtf8(data.mid(3 + usernameLen, messageLen));
         
-        chatArea->append("💬 " + username + ": " + content);
+        chatArea->append(username + ": " + content);
     } 
     else if (messageType == 56) {  // Historial de chat
         chatArea->clear();
@@ -191,7 +210,7 @@ void MessageHandler::receiveMessage(const QString& message) {
             QString content = QString::fromUtf8(data.mid(pos + 1, messageLen));
             pos += 1 + messageLen;
 
-            chatArea->append("📜 " + username + ": " + content);
+            chatArea->append(username + ": " + content);
         }
     } 
     else {
