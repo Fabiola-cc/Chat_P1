@@ -1,61 +1,76 @@
 #include <QApplication>
-#include <QWebSocket>
-#include <QLabel>
-#include <QVBoxLayout>
-#include <QWidget>
-#include <QTimer>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QTextEdit>
+#include <QWebSocket>      // Para la comunicación WebSocket
+#include <QLabel>          // Para etiquetas de texto
+#include <QVBoxLayout>     // Para organizar widgets verticalmente
+#include <QWidget>         // Clase base para todos los widgets de la UI
+#include <QTimer>          // Para temporizadores
+#include <QLineEdit>       // Para campos de entrada de texto
+#include <QPushButton>     // Para botones
+#include <QTextEdit>       // Para áreas de texto multilinea
 #include <iostream>
-#include <QComboBox>
-#include <QNetworkReply>
-#include "MessageHandler.h"
-#include "OptionsDialog.h"
+#include <QComboBox>       // Para menús desplegables
+#include <QNetworkReply>   // Para manejar respuestas de red
+#include "MessageHandler.h" // Clase personalizada para manejo de mensajes
+#include "OptionsDialog.h"  // Diálogo de opciones personalizado
 
 using namespace std;
 
+/**
+ * @class ChatClient
+ * @brief Clase principal del cliente de chat
+ * 
+ * Implementa una interfaz de chat basada en WebSockets que permite
+ * conectarse a un servidor, enviar mensajes y gestionar la lista de usuarios.
+ */
 class ChatClient : public QWidget {
     Q_OBJECT
 
 public:
+    /**
+     * @brief Constructor del cliente de chat
+     * @param parent Widget padre (opcional)
+     * 
+     * Inicializa la interfaz gráfica y configura las conexiones entre señales y slots.
+     */
     ChatClient(QWidget *parent = nullptr) : QWidget(parent) {
         setWindowTitle("Chat");
 
         QVBoxLayout *layout = new QVBoxLayout(this);
 
-        // Entrada de host, puerto y usuario
-        hostInput = new QLineEdit("localhost", this);
-        portInput = new QLineEdit("8080", this);
-        usernameInput = new QLineEdit("Usuario", this);
-        connectButton = new QPushButton("Conectar", this);
-        optionsButton = new QPushButton("Opciones", this);
+        // Controles para la configuración de conexión
+        hostInput = new QLineEdit("localhost", this);        // Campo para el host del servidor
+        portInput = new QLineEdit("8080", this);             // Campo para el puerto
+        usernameInput = new QLineEdit("Usuario", this);      // Campo para el nombre de usuario
+        connectButton = new QPushButton("Conectar", this);   // Botón para iniciar conexión
+        optionsButton = new QPushButton("Opciones", this);   // Botón para opciones adicionales
 
-
+        // Etiquetas para mostrar estado y errores
         statusLabel = new QLabel("Introduce los datos y presiona conectar.", this);
         errorLabel = new QLabel(this);
-        errorLabel->setStyleSheet("color: red; font-weight: bold;");  // Para resaltar errores
+        errorLabel->setStyleSheet("color: red; font-weight: bold;");  // Estilo para errores
 
-        // Área de chat (inicialmente oculta)
-        chatArea = new QTextEdit(this);
-        chatArea->setReadOnly(true);
-        chatArea->hide();  // Ocultar al inicio
-        messageInput = new QLineEdit( this);
-        messageInput->hide();  // Ocultar al inicio
-        sendButton = new QPushButton("Enviar", this);
-        sendButton->hide();  // Ocultar al inicio
-        userList = new QComboBox(this);  // 🔹 Lista de usuarios
-        userList->addItem("General");
-        userList->hide();
-        optionsButton->hide();
+        // Componentes de la interfaz de chat (inicialmente ocultos)
+        chatArea = new QTextEdit(this);             // Área donde se muestran los mensajes
+        chatArea->setReadOnly(true);                // Solo lectura para evitar edición
+        chatArea->hide();                           // Oculto hasta que se conecte
+        messageInput = new QLineEdit(this);         // Campo para escribir mensajes
+        messageInput->hide();                       // Oculto hasta que se conecte
+        sendButton = new QPushButton("Enviar", this); // Botón para enviar mensajes
+        sendButton->hide();                         // Oculto hasta que se conecte
+        userList = new QComboBox(this);             // Lista desplegable de usuarios
+        userList->addItem("General");               // Canal general por defecto
+        userList->hide();                           // Oculto hasta que se conecte
+        optionsButton->hide();                      // Oculto hasta que se conecte
        
+        // Menú desplegable para estado del usuario
         statusDropdown = new QComboBox(this);
-        statusDropdown->addItem("Activo", 1);
-        statusDropdown->addItem("Ocupado", 2);
-        statusDropdown->addItem("Inactivo", 3);
-        statusDropdown->setEnabled(false);
-        statusDropdown->hide();
+        statusDropdown->addItem("Activo", 1);       // Estado activo (valor 1)
+        statusDropdown->addItem("Ocupado", 2);      // Estado ocupado (valor 2)
+        statusDropdown->addItem("Inactivo", 3);     // Estado inactivo (valor 3)
+        statusDropdown->setEnabled(false);          // Deshabilitado hasta que se conecte
+        statusDropdown->hide();                     // Oculto hasta que se conecte
 
+        // Añadir todos los controles al layout vertical
         layout->addWidget(hostInput);
         layout->addWidget(portInput);
         layout->addWidget(usernameInput);
@@ -63,7 +78,7 @@ public:
         layout->addWidget(statusLabel);
         layout->addWidget(errorLabel); 
         layout->addWidget(statusDropdown);
-        layout->addWidget(chatArea);  // Añadir área de chat
+        layout->addWidget(chatArea);
         layout->addWidget(userList);
         layout->addWidget(messageInput);
         layout->addWidget(sendButton);
@@ -71,56 +86,70 @@ public:
 
         setLayout(layout);
 
-        // Conectar señales y slots
-        connect(connectButton, &QPushButton::clicked, this, &ChatClient::connectToServer);
-        connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);
-        connect(&socket, &QWebSocket::disconnected, this, &ChatClient::onDisconnected);
-        connect(optionsButton, &QPushButton::clicked, this, &ChatClient::showOptionsDialog);
+        // Configuración de conexiones entre señales y slots
+        connect(connectButton, &QPushButton::clicked, this, &ChatClient::connectToServer);   // Conectar al hacer clic
+        connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);            // Manejar conexión exitosa
+        connect(&socket, &QWebSocket::disconnected, this, &ChatClient::onDisconnected);      // Manejar desconexión
+        connect(optionsButton, &QPushButton::clicked, this, &ChatClient::showOptionsDialog); // Mostrar opciones
+        connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected); // Manejar cambio de usuario seleccionado
 
+        // Crear el manejador de mensajes (clase externa que procesa los mensajes)
+        messageHandler = new MessageHandler(
+            socket, messageInput, sendButton, chatArea, 
+            userList, statusDropdown, usernameInput, this
+        );
 
-        connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);  // 🔹 Llamar cuando se selecciona un usuario
-
-        // Crear el manejador de mensajes
-        messageHandler = new MessageHandler(socket, messageInput, sendButton, chatArea, userList, statusDropdown, usernameInput, this);
-
-        // Temporizador de reconexión
+        // Temporizador para intentos automáticos de reconexión
         reconnectTimer = new QTimer(this);
-        reconnectTimer->setInterval(5000);  // Intentar reconectar cada 5 segundos
+        reconnectTimer->setInterval(5000);  // Intervalo de 5 segundos entre intentos
         connect(reconnectTimer, &QTimer::timeout, this, &ChatClient::attemptReconnect);
     }
 
 public slots:
-
+    /**
+     * @brief Establece conexión con el servidor de chat
+     * 
+     * Obtiene los datos de conexión de los campos de la UI y
+     * intenta establecer una conexión WebSocket con el servidor.
+     */
     void connectToServer() {
         QString host = hostInput->text();
         QString port = portInput->text();
         QString username = usernameInput->text();
 
+        // Validación de campos obligatorios
         if (host.isEmpty() || port.isEmpty() || username.isEmpty()) {
             statusLabel->setText(" Todos los campos son obligatorios.");
             return;
         }
 
-        // Crear la URL del WebSocket
+        // Formatear la URL del WebSocket con los parámetros
+        // El formato es: ws://host:puerto?name=usuario
         QString url = QString("ws://%1:%2?name=%3").arg(host, port, username);
         statusLabel->setText("🔄 Conectando a " + url + "...");
 
-        // Imprimir la URL para asegurarnos de que está bien formada
+        // Registro para depuración
         qDebug() << "Conectando a la URL: " << url;
 
-        // Conectar la señal de conexión exitosa
+        // Conectar las señales para manejar eventos de la conexión
         connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);
-        // Conectar la señal de error
         connect(&socket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
             this, &ChatClient::onSocketError);
 
-        // Intentar abrir la conexión WebSocket
+        // Iniciar la conexión WebSocket
         socket.open(QUrl(url));
     }
 
-
+    /**
+     * @brief Maneja errores de conexión del socket
+     * @param error Tipo de error generado
+     * 
+     * Procesa diferentes tipos de errores de conexión y muestra
+     * mensajes informativos al usuario.
+     */
     void onSocketError(QAbstractSocket::SocketError error) {
         QString errorMessage;
+        // Traducir códigos de error a mensajes descriptivos
         switch (error) {
             case QAbstractSocket::HostNotFoundError:
                 errorMessage = "Host no encontrado. Verifica la dirección del servidor.";
@@ -146,93 +175,126 @@ public slots:
         }
         
         qDebug() << "Error de conexión WebSocket: " << errorMessage;
-        // Mostrar mensaje de error
+        // Mostrar mensaje de error en la interfaz
         statusLabel->setText("❌ Error: " + errorMessage);
     }
     
-
+    /**
+     * @brief Maneja el evento de desconexión del servidor
+     * 
+     * Actualiza la UI para mostrar nuevamente la pantalla de inicio de sesión
+     * cuando se pierde la conexión con el servidor.
+     */
     void onDisconnected() {
         statusLabel->setText("Se ha desconectado de la sesión.");
     
+        // Mostrar controles de conexión
         hostInput->show();
         portInput->show();
         usernameInput->show();
         connectButton->show();
         errorLabel->show();
     
+        // Ocultar la interfaz de chat
         chatArea->hide();
         userList->hide();
         messageInput->hide();
         sendButton->hide();
         optionsButton->hide();
-
-
     }
 
+    /**
+     * @brief Método alternativo para manejar errores WebSocket
+     * @param error Tipo de error generado
+     * 
+     * Muestra el mensaje de error sin cambiar el estado de conexión.
+     */
     void onWebSocketError(QAbstractSocket::SocketError error) {
         Q_UNUSED(error);
         
-        // Obtener mensaje de error
+        // Obtener mensaje de error del socket
         QString errorMsg = socket.errorString();
         
-        // Mostrar solo en errorLabel, sin modificar el estado de conexión
+        // Mostrar solo en la etiqueta de error
         errorLabel->setText("Error: " + errorMsg);
         qDebug() << "Error en WebSocket:" << errorMsg;
     }
 
+    /**
+     * @brief Maneja el evento de conexión exitosa
+     * 
+     * Actualiza la UI para mostrar la interfaz de chat cuando
+     * se establece la conexión con el servidor.
+     */
     void onConnected() {
         statusLabel->setText("Conectado al Chat");
-        reconnectTimer->stop();
-        statusDropdown->setEnabled(true);
+        reconnectTimer->stop();  // Detener intentos de reconexión
+        statusDropdown->setEnabled(true);  // Habilitar selección de estado
     
-        // Ocultar los inputs de conexión
+        // Ocultar controles de conexión
         hostInput->hide();
         portInput->hide();
         usernameInput->hide();
         connectButton->hide();
     
-        // Mostrar el área de chat y los controles de mensaje
+        // Mostrar la interfaz de chat
         chatArea->show();
         userList->show();
         messageInput->show();
         sendButton->show();
         optionsButton->show();
         statusDropdown->show();
-
     
         chatArea->append("Conectado al chat!");
 
-        // 🔹 Solicitar historial del chat general (~)
+        // Solicitar historial del chat general ('~' es el identificador del canal general)
         messageHandler->requestChatHistory("~");
     }    
 
-
+    /**
+     * @brief Intenta reconectar con el servidor
+     * 
+     * Llamado por el temporizador de reconexión para intentar
+     * restablecer la conexión con el servidor.
+     */
     void attemptReconnect() {
         connectToServer();
     }
 
+    /**
+     * @brief Maneja el cambio de usuario seleccionado
+     * 
+     * Solicita el historial de chat del usuario/canal seleccionado.
+     */
     void onUserSelected() {
         QString selectedUser = userList->currentText();
         if (!selectedUser.isEmpty()) {
-            messageHandler->requestChatHistory(selectedUser);  // 🔹 Cargar historial del usuario seleccionado
+            // Cargar historial del usuario/canal seleccionado
+            messageHandler->requestChatHistory(selectedUser);
         }
     }
 
+    /**
+     * @brief Muestra el diálogo de opciones
+     * 
+     * Crea y configura un diálogo de opciones que permite gestionar
+     * información de los usuarios conectados.
+     */
     void showOptionsDialog() {
         OptionsDialog *dialog = new OptionsDialog(this);
         
         // Pasar la lista de usuarios al diálogo
         dialog->setUserList(userList);
         
-        // Configuramos el diálogo para que se auto-destruya cuando se cierre
+        // Configurar para auto-destrucción al cerrar
         dialog->setAttribute(Qt::WA_DeleteOnClose);
         
-        // Establecer la función para solicitar información
+        // Configurar función para solicitar información de usuarios
         dialog->setRequestInfoFunction([this](const QString& username) {
             messageHandler->requestUserInfo(username);
         });
         
-        // Establecer callback para recibir información
+        // Configurar callback para recibir información de usuarios
         messageHandler->setUserInfoCallback([dialog](const QString& username, int status) {
             dialog->addUserInfo(username, status);
         });
@@ -242,31 +304,36 @@ public slots:
             messageHandler->setUserInfoCallback(nullptr);
         });
         
-        // Mostramos el diálogo de forma no-modal
+        // Mostrar diálogo como no-modal (permite interactuar con la ventana principal)
         dialog->show();
     }
 
 private:
-    QWebSocket socket;
-    QLabel *statusLabel;
-    QLabel *errorLabel;
-    QTimer *reconnectTimer;
-    QLineEdit *hostInput;
-    QLineEdit *portInput;
-    QLineEdit *usernameInput;
-    QPushButton *connectButton;
-    QPushButton *optionsButton;
-    QTextEdit *chatArea;
-    QLineEdit *messageInput;
-    QPushButton *sendButton;
-    QComboBox *userList;
-    QComboBox *statusDropdown;
-    MessageHandler *messageHandler;
+    QWebSocket socket;              // Socket para la comunicación WebSocket
+    QLabel *statusLabel;            // Etiqueta para mostrar el estado de la conexión
+    QLabel *errorLabel;             // Etiqueta para mostrar mensajes de error
+    QTimer *reconnectTimer;         // Temporizador para intentos de reconexión
+    QLineEdit *hostInput;           // Campo para dirección del servidor
+    QLineEdit *portInput;           // Campo para puerto del servidor
+    QLineEdit *usernameInput;       // Campo para nombre de usuario
+    QPushButton *connectButton;     // Botón para conectar
+    QPushButton *optionsButton;     // Botón para mostrar opciones
+    QTextEdit *chatArea;            // Área de visualización de mensajes
+    QLineEdit *messageInput;        // Campo para escribir mensajes
+    QPushButton *sendButton;        // Botón para enviar mensajes
+    QComboBox *userList;            // Lista de usuarios/canales
+    QComboBox *statusDropdown;      // Selector de estado del usuario
+    MessageHandler *messageHandler; // Manejador de mensajes
 };
 
+/**
+ * @brief Punto de entrada principal de la aplicación
+ * 
+ * Inicializa la aplicación Qt y crea la ventana principal del cliente de chat.
+ */
 int main(int argc, char *argv[]) {
-    QApplication app(argc, argv);
-    ChatClient client;
-    client.show();
-    return app.exec();
+    QApplication app(argc, argv);   // Crear aplicación Qt
+    ChatClient client;              // Crear la ventana del cliente
+    client.show();                  // Mostrar la ventana
+    return app.exec();              // Iniciar el bucle de eventos
 }
