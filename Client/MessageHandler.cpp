@@ -5,7 +5,7 @@
 MessageHandler::MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton* button, 
                                QTextEdit* chatArea, QComboBox* userList, QComboBox* stateList,  QLineEdit* usernameInput,  QObject* parent)
     : QObject(parent), socket(socket), messageInput(input), sendButton(button), 
-      chatArea(chatArea), userList(userList), stateList(stateList), usernameInput(usernameInput) {  
+      chatArea(chatArea), userList(userList), stateList(stateList), usernameInput(usernameInput),  m_userInfoCallback(nullptr) {  
     
     connect(sendButton, &QPushButton::clicked, this, &MessageHandler::sendMessage);
     connect(&socket, &QWebSocket::textMessageReceived, this, &MessageHandler::receiveMessage);
@@ -20,6 +20,23 @@ std::string get_status_string(int status) {
         case 3: return "Inactivo";
         default: return "Desconocido";
     }
+}
+
+
+
+void MessageHandler::setUserInfoCallback(std::function<void(const QString&, int)> callback) {
+    m_userInfoCallback = callback;
+}
+
+void MessageHandler::requestUserInfo(const QString& username) {
+    if (username.isEmpty()) return;
+
+    QByteArray request;
+    request.append(static_cast<char>(2));  // Tipo 2: Obtener info de usuario
+    request.append(static_cast<char>(username.length()));
+    request.append(username.toUtf8());
+
+    socket.sendBinaryMessage(request);
 }
 
 void MessageHandler::requestChatHistory(const QString& chatName) {
@@ -120,9 +137,26 @@ void MessageHandler::receiveMessage(const QString& message) {
             }
         }
     } 
-    //else if (messageType == 52) {
-      // break;
-    //}
+    else if (messageType == 52) {  // Información de usuario
+        quint8 success = static_cast<quint8>(data[1]);
+        
+        if (success) {
+            quint8 usernameLen = static_cast<quint8>(data[2]);
+            QString username = QString::fromUtf8(data.mid(3, usernameLen));
+            quint8 status = static_cast<quint8>(data[3 + usernameLen]);
+            
+            // Usar callback en lugar de emitir señal
+            if (m_userInfoCallback) {
+                m_userInfoCallback(username, status);
+            }
+            
+            // También se puede mostrar un mensaje en el chat
+            chatArea->append("ℹ️ Información de usuario: " + username + 
+                             " - Estado: " + QString::fromStdString(get_status_string(status)));
+        } else {
+            chatArea->append("⚠️ No se encontró información del usuario solicitado");
+        }
+    }
     else if (messageType == 53) {
         quint8 usernameLen = static_cast<quint8>(data[1]);
         QString username = QString::fromUtf8(data.mid(2, usernameLen));

@@ -5,7 +5,8 @@
 #include <QPushButton>
 #include <QComboBox>
 #include <QMap>
-#include <QTextEdit>  // Añadir esta línea
+#include <QTextEdit> 
+#include <functional> 
 
 class OptionsDialog : public QDialog {
     Q_OBJECT
@@ -16,9 +17,10 @@ public:
     
     // Método para establecer la lista de usuarios
     void setUserList(QComboBox* userList);
-    
     // Método para añadir información de usuario (estado e IP)
-    void addUserInfo(const QString& username, int status, const QString& ipAddress);
+    void addUserInfo(const QString &username, int status);
+    void setRequestInfoFunction(std::function<void(const QString&)> func);
+
 
 private slots:
     // Slot para el botón aceptar
@@ -30,12 +32,11 @@ private:
     QPushButton *acceptButton;
     QComboBox *userListView;
     QTextEdit *displayBox1;  // Primera caja para mostrar texto
-    QTextEdit *displayBox2;  // Segunda caja para mostrar texto
     
     // Mapas para almacenar el estado y la IP de cada usuario
     QMap<QString, int> userStatusMap;
-    QMap<QString, QString> userIPMap;
-    
+    std::function<void(const QString&)> m_requestInfoFunc;
+
     // Layout setup method
     void setupUI();
     

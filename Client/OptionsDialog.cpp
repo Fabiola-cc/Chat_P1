@@ -35,6 +35,10 @@ OptionsDialog::~OptionsDialog()
     // Cleanup if necessary
 }
 
+void OptionsDialog::setRequestInfoFunction(std::function<void(const QString&)> func) {
+    m_requestInfoFunc = func;
+}
+
 void OptionsDialog::setupUI()
 {
     // Main layout
@@ -60,17 +64,7 @@ void OptionsDialog::setupUI()
     displayBox1->setStyleSheet("background-color: #f0f0f0;");  // Fondo gris claro para indicar solo lectura
     mainLayout->addWidget(displayBox1);
     
-    // Añadir etiqueta para la segunda caja de visualización
-    QLabel *displayBox2Label = new QLabel("IP del Usuario:", this);
-    mainLayout->addWidget(displayBox2Label);
-    
-    // Añadir segunda caja de visualización (solo lectura)
-    displayBox2 = new QTextEdit(this);
-    displayBox2->setPlainText("...");
-    displayBox2->setReadOnly(true);  // Establecer como solo lectura
-    displayBox2->setMaximumHeight(30);
-    displayBox2->setStyleSheet("background-color: #f0f0f0;");  // Fondo gris claro para indicar solo lectura
-    mainLayout->addWidget(displayBox2);
+
    
     // Espacio en blanco, reducir la altura ya que añadimos cajas de texto
     QLabel *emptyLabel = new QLabel(this);
@@ -107,45 +101,44 @@ void OptionsDialog::setUserList(QComboBox* userList)
         QString username = userListView->itemText(i);
         if (username != "General") {
             // Simular datos de usuario
-            addUserInfo(username, 3 , "11.11");
+            addUserInfo(username, 3 );
         }
     }
 }
 
-void OptionsDialog::addUserInfo(const QString& username, int status, const QString& ipAddress)
+void OptionsDialog::addUserInfo(const QString& username, int status)
 {
     userStatusMap[username] = status;
-    userIPMap[username] = ipAddress;
+    
+    // Actualizar interfaz si corresponde al usuario seleccionado
+    if (userListView->currentText() == username) {
+        displayBox1->setPlainText(getStatusString(status));
+    }
 }
 
 QString OptionsDialog::getStatusString(int status)
 {
     switch (status) {
         case 0: return "Desconectado";
-        case 1: return "Ocupado";
-        case 2: return "Activo";
+        case 1: return "Activo";    
+        case 2: return "Ocupado";    
         case 3: return "Inactivo";
         default: return "Desconocido";
     }
 }
+
 void OptionsDialog::onAcceptClicked()
 {
     // Obtener el texto del elemento seleccionado en el ComboBox
     QString selectedUser = userListView->currentText();
     
-    // Verificar si es un usuario válido (no es "General")
-    if (selectedUser != "General" && userStatusMap.contains(selectedUser)) {
-        int status = userStatusMap[selectedUser];
-        QString statusStr = getStatusString(status);
-        QString ipAddress = userIPMap.contains(selectedUser) ? userIPMap[selectedUser] : "Desconocida";
-        
-        // Actualizar las cajas de visualización
-        displayBox1->setPlainText(statusStr);
-        displayBox2->setPlainText(ipAddress);
-
+    if (selectedUser != "General") {
+        // Usar la función de callback en lugar de emitir una señal
+        if (m_requestInfoFunc) {
+            m_requestInfoFunc(selectedUser);
+        }
+        // La interfaz se actualizará cuando llegue la respuesta
     } else {
-        // Si es "General" o no hay información
         displayBox1->setPlainText("...");
-        displayBox2->setPlainText("...");
     }
 }

@@ -220,12 +220,27 @@ public slots:
 
     void showOptionsDialog() {
         OptionsDialog *dialog = new OptionsDialog(this);
-    
+        
         // Pasar la lista de usuarios al diálogo
         dialog->setUserList(userList);
         
         // Configuramos el diálogo para que se auto-destruya cuando se cierre
         dialog->setAttribute(Qt::WA_DeleteOnClose);
+        
+        // Establecer la función para solicitar información
+        dialog->setRequestInfoFunction([this](const QString& username) {
+            messageHandler->requestUserInfo(username);
+        });
+        
+        // Establecer callback para recibir información
+        messageHandler->setUserInfoCallback([dialog](const QString& username, int status) {
+            dialog->addUserInfo(username, status);
+        });
+        
+        // Limpiar callback cuando se cierre el diálogo
+        connect(dialog, &QDialog::finished, this, [this]() {
+            messageHandler->setUserInfoCallback(nullptr);
+        });
         
         // Mostramos el diálogo de forma no-modal
         dialog->show();
