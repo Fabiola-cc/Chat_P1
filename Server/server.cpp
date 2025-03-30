@@ -200,6 +200,52 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data) {
     }
 }
 
+void send_info(const string& requester, const vector<uint8_t>& data) {
+    // Validación de datos entrantes
+    if (data.size() < 2) {
+        cerr << "❌ Error: Datos insuficientes para obtener información de usuario." << endl;
+        return;
+    }
+
+    uint8_t usernameLen = data[1];
+    if (data.size() < 2 + usernameLen) {
+        cerr << "❌ Error: Longitud del nombre de usuario incorrecta." << endl;
+        return;
+    }
+
+    // Extracción del nombre de usuario solicitado
+    string targetUsername(data.begin() + 2, data.begin() + 2 + usernameLen);
+    cout << "🔍 " << requester << " solicita información de: " << targetUsername << endl;
+
+    // Creación del paquete de respuesta
+    vector<uint8_t> response;
+    response.push_back(52);  // Tipo 52: Información de usuario
+
+    // Búsqueda de información del usuario
+    lock_guard<mutex> lock(clients_mutex);
+    auto it = clients.find(targetUsername);
+    
+    if (it != clients.end()) {
+        // Usuario encontrado - incluir información
+        response.push_back(1);  // Indicador de éxito
+        response.push_back(usernameLen);
+        response.insert(response.end(), targetUsername.begin(), targetUsername.end());
+        response.push_back(it->second.status);
+        
+        cout << "✅ Información de usuario " << targetUsername << " enviada a " << requester << endl;
+    } else {
+        // Usuario no encontrado
+        response.push_back(0);  // Indicador de fallo
+        cout << "⚠️ Usuario " << targetUsername << " no encontrado" << endl;
+    }
+
+    // Envío de respuesta al solicitante
+    auto requester_it = clients.find(requester);
+    if (requester_it != clients.end() && requester_it->second.status == 1 && requester_it->second.ws->is_open()) {
+        requester_it->second.ws->write(net::buffer(response));
+    }
+}
+
 void handle_message(const string& sender, const vector<uint8_t>& data) {
     if (data.empty()) return;
 
@@ -213,6 +259,9 @@ void handle_message(const string& sender, const vector<uint8_t>& data) {
                     send_users_list(*clients[sender].ws);
                 }
             }
+            break;
+        case 2: 
+            send_info(sender,data);
             break;
         case 3:
             change_state(data);
