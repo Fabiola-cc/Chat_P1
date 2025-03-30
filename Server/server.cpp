@@ -32,8 +32,9 @@ std::unordered_map<std::string, ClientSession> clients;
 // Mutex para proteger el acceso concurrente al mapa de clientes
 std::mutex clients_mutex;
 
-// Mapa que almacena el historial de chat, indexado por nombre de conversación
-unordered_map<string, vector<pair<string, string>>> chatHistory;
+// Mapa que almacena el historial de chat
+// La clave es un ID del chat, 
+unordered_map<string, vector<pair<string, string>>> chatHistory; 
 // Mutex para proteger el acceso concurrente al historial
 mutex history_mutex;
 
@@ -84,6 +85,21 @@ void print_users() {
     }
     std::cout << std::endl;
 }
+
+/** 
+ * Genere una clave única para cada conversación
+ * 
+ * @param user1 uno de los usuarios en la conversación
+ * @param user2 uno de los usuarios en la conversación
+*/
+string get_chat_id(const string& user1, const string& user2) {
+    if (user1 < user2) {
+        return user1 + "-" + user2;  // Orden lexicográfico
+    } else {
+        return user2 + "-" + user1;
+    }
+}
+
 
 /**
  * Envía la lista de usuarios conectados al cliente solicitante.
@@ -188,6 +204,10 @@ void get_chat_history(const string& requester, const vector<uint8_t>& data, webs
 
     // Extraer nombre del chat solicitado
     string chatName(data.begin() + 2, data.begin() + 2 + chatLen);
+    
+    // Generar la clave del chat
+    string chat_id = chatName != "~" ? get_chat_id(requester, chatName) : chatName;
+
 
     // Construir respuesta
     vector<uint8_t> response;
@@ -196,11 +216,11 @@ void get_chat_history(const string& requester, const vector<uint8_t>& data, webs
     {
         lock_guard<mutex> lock(history_mutex);
 
-        uint8_t numMessages = chatHistory[chatName].size();
+        uint8_t numMessages = chatHistory[chat_id].size();
         response.push_back(numMessages);  // Número de mensajes
 
         // Agregar cada mensaje del historial
-        for (const auto& [sender, msg] : chatHistory[chatName]) {
+        for (const auto& [sender, msg] : chatHistory[chat_id]) {
             response.push_back(sender.size());                           // Longitud del emisor
             response.insert(response.end(), sender.begin(), sender.end()); // Nombre del emisor
             response.push_back(msg.size());                               // Longitud del mensaje
@@ -247,8 +267,10 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data) {
     // Guardar en historial
     {
         lock_guard<mutex> lock(history_mutex);
-        chatHistory[recipient].emplace_back(sender, message);
-    }
+        //Usa el id del chat, solamente el chat general usa su nombre como id
+        string chat_id = recipient != "~" ? get_chat_id(sender, recipient) : recipient;
+        chatHistory[chat_id].emplace_back(sender, message);
+    }    
 
     // Preparar mensaje para reenvío
     vector<uint8_t> response;
@@ -273,9 +295,8 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data) {
             }
         }
     } else {
-        
         // Enviar al destinatario específico
-        if (clients.find(recipient) != clients.end() && clients[recipient].status == 1) {
+        if (clients.find(recipient) != clients.end() && clients[recipient].status != 0) {
             clients[recipient].ws->write(net::buffer(response));
         } else {
             vector<uint8_t> error;
@@ -287,7 +308,7 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data) {
             }
             
             int actualStatus = clients[recipient].status;
-            if (actualStatus == 2 || actualStatus == 0) {
+            if (actualStatus == 0) {
                 error.push_back(50); // ERROR
                 error.push_back(4); // usuario con estatus desconectado
                 clients[sender].ws->write(net::buffer(error));

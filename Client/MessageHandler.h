@@ -20,14 +20,14 @@ public:
     void requestChatHistory(const QString& chatName);
     void requestChangeState(const QString& username, uint8_t newStatus);
     void requestUserInfo(const QString& username);
-    
-    // Nueva función para establecer el callback
     void setUserInfoCallback(std::function<void(const QString&, int)> callback);
 
 private slots:
     void sendMessage();
     void receiveMessage(const QString& message);
     void onStateChanged(int index);
+    void showChatMessages(const QString& user2);
+    QString get_chat_id(const QString& user2);
 
 private:
     QWebSocket& socket;

@@ -246,9 +246,6 @@ public slots:
         statusDropdown->show();
     
         chatArea->append("Conectado al chat!");
-
-        // Solicitar historial del chat general ('~' es el identificador del canal general)
-        messageHandler->requestChatHistory("~");
     }    
 
     /**
@@ -269,6 +266,7 @@ public slots:
     void onUserSelected() {
         QString selectedUser = userList->currentText();
         if (!selectedUser.isEmpty()) {
+            chatArea->clear();  // Limpiar antes de mostrar los mensajes
             // Cargar historial del usuario/canal seleccionado
             messageHandler->requestChatHistory(selectedUser);
         }
