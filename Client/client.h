@@ -33,7 +33,7 @@ private:
     QPushButton *optionsButton;
 
 private slots:
-    void onUserSelected();  // 🔹 Nueva función para cargar historial al seleccionar usuario
+    void onUserSelected(const QString& selectedUser);
     void showOptionsDialog();
 };
 

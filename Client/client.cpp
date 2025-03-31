@@ -309,6 +309,8 @@ public slots:
 
         // Reconectar cuando todo está listo
         QTimer::singleShot(500, this, [this]() {
+            // Asegurarse de que no haya conexiones previas antes de conectar de nuevo
+            disconnect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);
             connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);
         });
     }    
@@ -328,9 +330,10 @@ public slots:
      * 
      * Solicita el historial de chat del usuario/canal seleccionado.
      */
-    void onUserSelected() {
-        QString selectedUser = userList->currentText();
+    void onUserSelected(const QString& selectedUser) {
+        
         if (!selectedUser.isEmpty()) {
+            cout << "LLAMADA para usuario: " << selectedUser.toStdString() << endl;
             chatArea->clear();  // Limpiar antes de mostrar los mensajes
             // Cargar historial del usuario/canal seleccionado
             messageHandler->requestChatHistory(selectedUser);
