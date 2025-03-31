@@ -173,32 +173,46 @@ public slots:
      * Obtiene los datos de conexión de los campos de la UI y
      * intenta establecer una conexión WebSocket con el servidor.
      */
-    void connectToServer() {
+     void connectToServer() {
         QString host = hostInput->text();
         QString port = portInput->text();
         QString username = usernameInput->text();
-
+    
         // Validación de campos obligatorios
         if (host.isEmpty() || port.isEmpty() || username.isEmpty()) {
             statusLabel->setText(" Todos los campos son obligatorios.");
             return;
         }
-
-        // Formatear la URL del WebSocket con los parámetros
-        // El formato es: ws://host:puerto?name=usuario
-        QString url = QString("ws://%1:%2?name=%3").arg(host, port, username);
-        statusLabel->setText("🔄 Conectando a " + url + "...");
-
-        // Registro para depuración
-        qDebug() << "Conectando a la URL: " << url;
-
-        // Conectar las señales para manejar eventos de la conexión
-        connect(&socket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
-            this, &ChatClient::onSocketError);
-
-        // Iniciar la conexión WebSocket
-        socket.open(QUrl(url));
+    
+        QUrl httpURL = QUrl(QString("http://%1:%2?name=%3").arg(host, port, username));
+        QNetworkRequest request(httpURL);
+    
+        auto *response = http.get(QNetworkRequest(httpURL));
+        connect(response, &QNetworkReply::finished, this, [this, response, host, port, username](){
+            int replyCode = response->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            response->deleteLater();
+            
+            if (replyCode == 400) {
+                qDebug() << response << replyCode;
+                errorLabel->setText("Error 400: el nombre ya no está disponible.");
+            } else if (replyCode >= 200 && replyCode < 300) {
+                qDebug() << "Valida la respuesta HTTP, procediendo a conectar con websocket";
+                QString url = QString("ws://%1:%2?name=%3").arg(host, port, username);
+                statusLabel->setText("Conectando a " + url + "...");
+        
+                connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);
+                connect(&socket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
+                        this, &ChatClient::onSocketError);
+                
+                socket.open(QUrl(url));
+                
+                qDebug() << "Conectando a la URL: " << url;
+            } else {
+                errorLabel->setText("Error: Hubo un error con el servidor");
+            }
+        });
     }
+    
 
     /**
      * @brief Maneja errores de conexión del socket
@@ -413,6 +427,7 @@ public slots:
 
 private:
     QWebSocket socket;              // Socket para la comunicación WebSocket
+    QNetworkAccessManager http;     // Comunicacion http
     QLabel *statusLabel;            // Etiqueta para mostrar el estado de la conexión
     QLabel *errorLabel;             // Etiqueta para mostrar mensajes de error
     QLineEdit *hostInput;           // Campo para dirección del servidor
