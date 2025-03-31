@@ -188,12 +188,6 @@ public slots:
 
         QNetworkRequest request(httpURL);
 
-        // Imprimir los encabezados de la solicitud HTTP
-        qDebug() << "Encabezados de la solicitud HTTP:";
-        const auto rawRequestHeaders = request.rawHeaderList();
-        for (const auto &header : rawRequestHeaders) {
-            qDebug() << header;
-        }
     
         auto *response = http.get(QNetworkRequest(httpURL));
         connect(response, &QNetworkReply::finished, this, [this, response, host, port, username](){
@@ -204,6 +198,7 @@ public slots:
                 qDebug() << response << replyCode;
                 errorLabel->setText("Error 400: el nombre ya no está disponible.");
             } else if (replyCode >= 200 && replyCode < 300) {
+                qDebug() << "Valida la respuesta HTTP, procediendo a conectar con websocket";
                 QString url = QString("ws://%1:%2?name=%3").arg(host, port, username);
                 statusLabel->setText("Conectando a " + url + "...");
         

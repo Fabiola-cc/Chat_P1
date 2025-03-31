@@ -497,83 +497,91 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
  * 
  * @param socket Socket TCP establecido con el cliente
  */
-void do_session(net::ip::tcp::socket socket) {
+ void do_session(net::ip::tcp::socket socket) {
     beast::flat_buffer buffer;
     http::request<http::string_body> req;
     std::string username;
+    bool connectionAccepted = false;
+    
 
     try {
         // Leer la solicitud HTTP inicial
-        std::cout << "🔍 Iniciando lectura de la solicitud HTTP...\n";
         http::read(socket, buffer, req);
-        std::cout << "🔍 Solicitud HTTP leída. Método: " << req.method_string() << " URL: " << req.target() << "\n";
 
-        // Verificar si la solicitud contiene los encabezados de WebSocket
         std::string connHdr = std::string(req[http::field::connection]);
         std::string upgHdr = std::string(req[http::field::upgrade]);
-        std::cout << "🔍 Encabezado Connection: " << connHdr << "\n";
-        std::cout << "🔍 Encabezado Upgrade: " << upgHdr << "\n";
-
-        if (connHdr.find("Upgrade") == std::string::npos || upgHdr.find("websocket") == std::string::npos) {
-            // No es una solicitud WebSocket válida
-            std::cout << "❌ Solicitud no válida. Se esperaba WebSocket.\n";
-            http::response<http::string_body> res{http::status::bad_request, req.version()};
-            res.body() = "Solicitud no válida. Se esperaba WebSocket.";
-            http::write(socket, res);
-            return;
-        }
-
-        // Obtener el nombre de usuario del query string
         std::string target = std::string(req.target());
-        username = extract_username(target);  // Suponiendo que tienes esta función
-        std::cout << "🔍 Nombre de usuario extraído: " << username << "\n";
+        username = extract_username(target); 
 
-        if (username.empty() || username == "~") {
-            std::cout << "❌ Nombre de usuario no permitido: " << username << "\n";
-            http::response<http::string_body> res{http::status::bad_request, req.version()};
-            res.body() = "Nombre de usuario no permitido.";
-            http::write(socket, res);
-            return;
-        }
+        // Verificar si la solicitud contiene los encabezados correctos para WebSocket
+        if (connHdr.find("Upgrade") == std::string::npos || upgHdr.find("websocket") == std::string::npos) {
+            http::response<http::string_body> res{http::status::ok, req.version()};
 
-        // Revisar si el nombre de usuario está disponible
-        std::cout << "🔍 Verificando disponibilidad del nombre de usuario: " << username << "\n";
-        {
+            // Validación del nombre de usuario
+            if (username.empty() || username == "~") {
+                std::cout << "❌ Nombre de usuario no permitido: " << username << "\n";
+                http::response<http::string_body> res{http::status::bad_request, req.version()};
+                res.body() = "Nombre de usuario no permitido.";
+                http::write(socket, res);
+                return;
+            }
+
+            // Comprobación de si el usuario ya está conectado
             std::lock_guard<std::mutex> lock(clients_mutex);
             auto it = clients.find(username);
             if (it != clients.end() && it->second.status != 0) {
-                // Usuario ya está conectado
                 std::cout << "❌ Usuario ya está conectado: " << username << "\n";
                 http::response<http::string_body> res{http::status::bad_request, req.version()};
                 res.body() = "Usuario ya está conectado.";
                 http::write(socket, res);
                 return;
             }
-
-            // Si todo es correcto, registramos al usuario
-            clients[username] = {std::make_shared<websocket::stream<tcp::socket>>(std::move(socket)), 1, socket.remote_endpoint().address().to_string()};
-            std::cout << "✔️ Usuario registrado exitosamente: " << username << "\n";
+            res.prepare_payload();
+            http::write(socket, res);
+            return;
         }
 
-        // Aceptar la conexión WebSocket
-        auto ws = std::make_shared<websocket::stream<tcp::socket>>(std::move(socket));
-        ws->accept(req);
-        std::cout << "🔗 Conexión WebSocket aceptada para el usuario: " << username << "\n";
+        auto ws = std::make_shared<websocket::stream<net::ip::tcp::socket>>(std::move(socket));
+        std::string clientIP = ws->next_layer().remote_endpoint().address().to_string();
 
-        // Bucle de recepción de mensajes
-        std::cout << "🔍 Esperando mensajes del usuario: " << username << "\n";
-        while (ws->is_open()) {
+        if (clients.find(username) == clients.end()) {
+            // Caso 1: Usuario completamente nuevo
+            clients[username] = {ws, 1, clientIP};  // Estado: Activo
+            std::cout << "✅ Nuevo usuario conectado: " << username<< " desde " << clientIP  << std::endl;
+            connectionAccepted = true;
+        } else if (clients[username].status == 0) {
+            // Caso 2: Usuario estaba desconectado y se reconecta
+            clients[username] = {ws, 1};  // Estado: Activo
+            std::cout << "🔄 Usuario reconectado: " << username << " desde " << clientIP << std::endl;
+            connectionAccepted = true;
+        }
+
+        if (connectionAccepted) {
+            // Aceptar la conexión WebSocket
+            ws->accept(req);
+            std::cout << "🔗 Cliente conectado\n";
+            print_users();
+            broadcast_new_user(username);
+            send_users_list(*ws);
+        }
+
+        // Bucle principal de la sesión
+        while (connectionAccepted) {
+            if (!ws->is_open()) {
+                std::cout << "❌ Conexión WebSocket cerrada por el cliente: " << username << std::endl;
+                break;
+            }
+
             beast::flat_buffer buffer;
-            ws->read(buffer);
-            std::cout << "🔍 Mensaje recibido del usuario: " << username << "\n";
+            ws->read(buffer);  // Leer datos del cliente WebSocket
 
+            // Convertir los datos recibidos a un vector de bytes
             auto data = buffer.data();
             std::vector<uint8_t> message_data(boost::asio::buffer_cast<const uint8_t*>(data),
                                               boost::asio::buffer_cast<const uint8_t*>(data) + boost::asio::buffer_size(data));
 
             if (!message_data.empty()) {
-                std::cout << "🔍 Procesando mensaje...\n";
-                handle_message(username, message_data);
+                handle_message(username, message_data);  // Procesar el mensaje
             }
         }
     } catch (const boost::system::system_error& e) {
@@ -593,6 +601,7 @@ void do_session(net::ip::tcp::socket socket) {
 
     print_users();
 }
+
 
 /**
  * Función principal del programa.
