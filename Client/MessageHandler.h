@@ -13,9 +13,11 @@ class MessageHandler : public QObject {
     Q_OBJECT
 
 public:
-    explicit MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton* button, 
-                            QTextEdit* chatArea, QComboBox* userList, QComboBox* stateList, 
-                            QLineEdit* usernameInput, QObject* parent = nullptr);
+    explicit MessageHandler(QWebSocket& socket, 
+        QLineEdit* generalInput, QPushButton* generalButton, QTextEdit* generalChatArea,
+        QLineEdit* input, QPushButton* button, QTextEdit* chatArea, 
+        QComboBox* userList, QComboBox* stateList, QLineEdit* usernameInput,
+        QObject* parent = nullptr);
 
     void requestChatHistory(const QString& chatName);
     void requestChangeState(const QString& username, uint8_t newStatus);
@@ -23,7 +25,8 @@ public:
     void setUserInfoCallback(std::function<void(const QString&, int)> callback);
 
 private slots:
-    void sendMessage();
+    void sendMessage();         // Enviar mensaje en chat personal
+    void sendGeneralMessage();  // Nuevo slot para enviar mensaje en chat general
     void receiveMessage(const QString& message);
     void onStateChanged(int index);
     void showChatMessages(const QString& user2);
@@ -31,12 +34,18 @@ private slots:
 
 private:
     QWebSocket& socket;
+    // Componentes para el chat general
+    QLineEdit* generalMessageInput;
+    QPushButton* generalSendButton;
+    QTextEdit* generalChatArea;
+    
+    // Componentes para el chat personal
     QLineEdit* messageInput;
     QPushButton* sendButton;
     QTextEdit* chatArea;
     QComboBox* userList;
     QComboBox* stateList;
-    QLineEdit* usernameInput;  
+    QLineEdit* usernameInput;
     QByteArray buildMessage(quint8 type, const QString& param1, const QString& param2 = "");
     
     // Callback para manejar información de usuario

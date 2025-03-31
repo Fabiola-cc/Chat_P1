@@ -6,28 +6,43 @@
 
 using namespace std;
 unordered_map<string, vector<pair<string, string>>> localChatHistory; // clave: ID del chat
+unordered_map<string, string> userStates;
 
 /**
  * @brief Constructor de la clase MessageHandler
  * 
  * @param socket WebSocket utilizado para la comunicación con el servidor
- * @param input Campo de entrada para mensajes de texto
- * @param button Botón para enviar mensajes
- * @param chatArea Área de texto donde se muestran los mensajes
- * @param userList Lista desplegable de usuarios
+ * @param generalInput Campo de entrada para mensajes de texto del chat general
+ * @param generalButton Botón para enviar mensajes al chat general
+ * @param generalChatArea Área de texto donde se muestran los mensajes del chat general
+ * @param input Campo de entrada para mensajes de texto del chat personal
+ * @param button Botón para enviar mensajes al chat personal
+ * @param chatArea Área de texto donde se muestran los mensajes del chat personal
+ * @param userList Lista desplegable de usuarios para el chat personal
  * @param stateList Lista desplegable para seleccionar el estado del usuario
  * @param usernameInput Campo con el nombre del usuario actual
  * @param parent Objeto padre para la gestión de memoria (modelo Qt parent-child)
  */
-MessageHandler::MessageHandler(QWebSocket& socket, QLineEdit* input, QPushButton* button, 
-                               QTextEdit* chatArea, QComboBox* userList, QComboBox* stateList,  QLineEdit* usernameInput,  QObject* parent)
-    : QObject(parent), socket(socket), messageInput(input), sendButton(button), 
-      chatArea(chatArea), userList(userList), stateList(stateList), usernameInput(usernameInput),  m_userInfoCallback(nullptr) {  
-    
-    // Conectar señales y slots
-    connect(sendButton, &QPushButton::clicked, this, &MessageHandler::sendMessage);         // Enviar mensaje al hacer clic
-    connect(&socket, &QWebSocket::textMessageReceived, this, &MessageHandler::receiveMessage); // Procesar mensajes recibidos
-    connect(stateList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MessageHandler::onStateChanged);  // Conectar cambios de estado
+MessageHandler::MessageHandler(QWebSocket& socket, 
+    QLineEdit* generalInput, QPushButton* generalButton, QTextEdit* generalChatArea,
+    QLineEdit* input, QPushButton* button, QTextEdit* chatArea, 
+    QComboBox* userList, QComboBox* stateList, QLineEdit* usernameInput, 
+    QObject* parent)
+    : QObject(parent), socket(socket), 
+    generalMessageInput(generalInput), generalSendButton(generalButton), generalChatArea(generalChatArea),
+    messageInput(input), sendButton(button), chatArea(chatArea), 
+    userList(userList), stateList(stateList), usernameInput(usernameInput), 
+    m_userInfoCallback(nullptr) {  
+
+    // Conectar señales y slots para el chat personal
+    connect(sendButton, &QPushButton::clicked, this, &MessageHandler::sendMessage);
+    connect(&socket, &QWebSocket::textMessageReceived, this, &MessageHandler::receiveMessage);
+
+    // Conectar señales y slots para el chat general
+    connect(generalSendButton, &QPushButton::clicked, this, &MessageHandler::sendGeneralMessage);
+
+    // Conectar cambios de estado
+    connect(stateList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MessageHandler::onStateChanged);
 }
 
 /**
@@ -163,7 +178,7 @@ void MessageHandler::sendMessage() {
         return;
     }
 
-    // Determinar el destinatario (~ para chat general)
+    // Determinar el destinatario
     QString recipient = userList->currentText();
 
     // Construir y enviar el mensaje
@@ -171,6 +186,36 @@ void MessageHandler::sendMessage() {
     socket.sendBinaryMessage(formattedMessage);
 
     messageInput->clear();  // Limpiar campo de entrada
+}
+
+/**
+ * @brief Envía un mensaje de chat general
+ * 
+ * Obtiene el texto del campo de entrada y el destinatario seleccionado,
+ * construye el mensaje y lo envía al servidor.
+ */
+void MessageHandler::sendGeneralMessage() {
+    // Verificar que hay texto para enviar
+    QString message = generalMessageInput->text().trimmed();
+    
+    if (message.isEmpty()) {
+        generalChatArea->append("!! Mensaje vacío");
+        return;
+    }
+    if (message.length() > 255) {
+        generalChatArea->append("!! Mensaje inválido (demasiado largo)");
+        return;
+    }
+
+    // Determinar el destinatario
+    QString recipient = "~";
+
+    // Construir y enviar el mensaje
+    QByteArray formattedMessage = buildMessage(4, recipient, message);  // Tipo 4: mensaje de chat
+    socket.sendBinaryMessage(formattedMessage);
+    
+    // Limpiar el campo de entrada después de enviar
+    generalMessageInput->clear();
 }
 
 /** 
@@ -194,7 +239,13 @@ QString MessageHandler::get_chat_id(const QString& user2) {
  * @param user2 Segunda persona en conversación (puede ser el chat general)
  */
 void MessageHandler::showChatMessages(const QString& user2) {
-    string chat_id = user2.toStdString() != "~" ? get_chat_id(user2).toStdString() : user2.toStdString();
+    // Determinar si es chat general o personal
+    bool isGeneralChat = (user2 == "~");
+    
+    // Seleccionar el área de chat adecuada
+    QTextEdit* targetChatArea = isGeneralChat ? generalChatArea : chatArea;
+
+    string chat_id = isGeneralChat ? get_chat_id(user2).toStdString() : user2.toStdString();
 
     // Verificar si existe historial para el chat dado
     auto it = localChatHistory.find(chat_id);
@@ -203,7 +254,7 @@ void MessageHandler::showChatMessages(const QString& user2) {
             const auto& sender = pair.first;
             const auto& content = pair.second;
         
-            chatArea->append(QString::fromStdString(sender) + ": " + QString::fromStdString(content));
+            targetChatArea->append(QString::fromStdString(sender) + ": " + QString::fromStdString(content));
         }
     }
 }
@@ -254,13 +305,11 @@ void MessageHandler::receiveMessage(const QString& message) {
     if (messageType == 50) { // ERROR
         quint8 errorType = static_cast<quint8>(data[1]);
         cerr << "⚠️ " + get_error_string(errorType) << endl;  // Log en consola
-        chatArea->append(QString::fromStdString(get_error_string(errorType)));  // Mostrar en chat
     }
     else if (messageType == 51) {  // Lista de usuarios con estados
         userList->clear();  // Limpiar lista actual
         quint8 numUsers = static_cast<quint8>(data[1]);  // Número de usuarios
         int pos = 2;  // Posición para leer datos
-        userList->addItem("~");  // Añadir chat general
 
         // Procesar cada usuario en la lista
         for (quint8 i = 0; i < numUsers; i++) {
@@ -299,10 +348,10 @@ void MessageHandler::receiveMessage(const QString& message) {
             }
             
             // Mostrar información en el chat
-            chatArea->append("Información de usuario: " + username + 
+            generalChatArea->append("Información de usuario: " + username + 
                              " - Estado: " + QString::fromStdString(get_status_string(status)));
         } else {
-            chatArea->append("No se encontró información del usuario solicitado");
+            generalChatArea->append("No se encontró información del usuario solicitado");
         }
     }
     else if (messageType == 53) {  // Nuevo usuario conectado
@@ -316,7 +365,7 @@ void MessageHandler::receiveMessage(const QString& message) {
         quint8 newStatus = static_cast<quint8>(data[2 + usernameLen]);
         
         // Mostrar notificación del cambio de estado
-        chatArea->append("**" + username + " ha cambiado su estado a " + 
+        generalChatArea->append("**" + username + " ha cambiado su estado a " + 
                         QString::fromStdString(get_status_string(newStatus)) + "**");
     }
     else if (messageType == 55) {  // Mensaje normal de chat
@@ -333,7 +382,7 @@ void MessageHandler::receiveMessage(const QString& message) {
         // Mostrar mensaje en el área de chat
         if (currentUser == username) username = "Tú";
         
-        chatArea->append(username + ": " + content);
+        generalChatArea->append(username + ": " + content);
     } 
     else if (messageType == 56) {  // Historial de chat recibido
         quint8 numMessages = static_cast<quint8>(data[1]);  // Número de mensajes

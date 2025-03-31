@@ -33,9 +33,23 @@ public:
      * Inicializa la interfaz gráfica y configura las conexiones entre señales y slots.
      */
     ChatClient(QWidget *parent = nullptr) : QWidget(parent) {
+        resize(800, 600); // Establecer tamaño inicial
         setWindowTitle("Chat");
 
-        QVBoxLayout *layout = new QVBoxLayout(this);
+        // Layout principal horizontal para colocar los dos paneles lado a lado
+        QVBoxLayout *mainLayout = new QVBoxLayout(this);
+
+        // Controles comunes para la configuración de conexión (en la parte superior)
+        QWidget *configPanel = new QWidget(this);
+        QHBoxLayout *configLayout = new QHBoxLayout(configPanel);
+        
+        // Panel izquierdo
+        QWidget *leftPanel = new QWidget(this);
+        QVBoxLayout *leftLayout = new QVBoxLayout(leftPanel);
+        
+        // Panel derecho
+        QWidget *rightPanel = new QWidget(this);
+        QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
 
         // Controles para la configuración de conexión
         hostInput = new QLineEdit("localhost", this);        // Campo para el host del servidor
@@ -49,7 +63,44 @@ public:
         errorLabel = new QLabel(this);
         errorLabel->setStyleSheet("color: red; font-weight: bold;");  // Estilo para errores
 
+        // Añadir todos los controles al layout vertical
+        mainLayout->addWidget(hostInput);
+        mainLayout->addWidget(portInput);
+        mainLayout->addWidget(usernameInput);
+        mainLayout->addWidget(connectButton);
+        mainLayout->addWidget(statusLabel);
+        mainLayout->addWidget(errorLabel); 
+
         // Componentes de la interfaz de chat (inicialmente ocultos)
+        // Menú desplegable para estado del usuario
+        statusDropdown = new QComboBox(this);
+        statusDropdown->addItem("Activo", 1);       // Estado activo (valor 1)
+        statusDropdown->addItem("Ocupado", 2);      // Estado ocupado (valor 2)
+        statusDropdown->addItem("Inactivo", 3);     // Estado inactivo (valor 3)
+        statusDropdown->setEnabled(false);          // Deshabilitado hasta que se conecte
+        statusDropdown->hide();                     // Oculto hasta que se conecte
+
+        mainLayout->addWidget(statusDropdown);
+
+        // Chat IZQUIERDO
+        generalChatLabel = new QLabel("Chat general: ", this);
+        generalChatLabel->hide();
+        generalChatArea = new QTextEdit(this);             // Área donde se muestran los mensajes
+        generalChatArea->setReadOnly(true);                // Solo lectura para evitar edición
+        generalChatArea->hide();                           // Oculto hasta que se conecte
+        generalMessageInput = new QLineEdit(this);         // Campo para escribir mensajes
+        generalMessageInput->hide();                       // Oculto hasta que se conecte
+        generalSendButton = new QPushButton("Enviar", this); // Botón para enviar mensajes
+        generalSendButton->hide();                         // Oculto hasta que se conecte
+
+        leftLayout->addWidget(generalChatLabel);
+        leftLayout->addWidget(generalChatArea);
+        leftLayout->addWidget(generalMessageInput);
+        leftLayout->addWidget(generalSendButton);
+
+        // Chat DERECHO
+        chatLabel = new QLabel("Chat personal: ", this);
+        chatLabel->hide();
         chatArea = new QTextEdit(this);             // Área donde se muestran los mensajes
         chatArea->setReadOnly(true);                // Solo lectura para evitar edición
         chatArea->hide();                           // Oculto hasta que se conecte
@@ -60,31 +111,22 @@ public:
         userList = new QComboBox(this);             // Lista desplegable de usuarios
         userList->addItem("General");               // Canal general por defecto
         userList->hide();                           // Oculto hasta que se conecte
+
+        rightLayout->addWidget(chatLabel);
+        rightLayout->addWidget(chatArea);
+        rightLayout->addWidget(userList);
+        rightLayout->addWidget(messageInput);
+        rightLayout->addWidget(sendButton);
+
+        // Opcioness, general
         optionsButton->hide();                      // Oculto hasta que se conecte
-       
-        // Menú desplegable para estado del usuario
-        statusDropdown = new QComboBox(this);
-        statusDropdown->addItem("Activo", 1);       // Estado activo (valor 1)
-        statusDropdown->addItem("Ocupado", 2);      // Estado ocupado (valor 2)
-        statusDropdown->addItem("Inactivo", 3);     // Estado inactivo (valor 3)
-        statusDropdown->setEnabled(false);          // Deshabilitado hasta que se conecte
-        statusDropdown->hide();                     // Oculto hasta que se conecte
+        
+        configLayout->addWidget(leftPanel);
+        configLayout->addWidget(rightPanel);
+        mainLayout ->addWidget(configPanel);
+        mainLayout->addWidget(optionsButton);
 
-        // Añadir todos los controles al layout vertical
-        layout->addWidget(hostInput);
-        layout->addWidget(portInput);
-        layout->addWidget(usernameInput);
-        layout->addWidget(connectButton);
-        layout->addWidget(statusLabel);
-        layout->addWidget(errorLabel); 
-        layout->addWidget(statusDropdown);
-        layout->addWidget(chatArea);
-        layout->addWidget(userList);
-        layout->addWidget(messageInput);
-        layout->addWidget(sendButton);
-        layout->addWidget(optionsButton);
-
-        setLayout(layout);
+        setLayout(mainLayout);
 
         // Configuración de conexiones entre señales y slots
         connect(connectButton, &QPushButton::clicked, this, &ChatClient::connectToServer);   // Conectar al hacer clic
@@ -95,8 +137,11 @@ public:
 
         // Crear el manejador de mensajes (clase externa que procesa los mensajes)
         messageHandler = new MessageHandler(
-            socket, messageInput, sendButton, chatArea, 
-            userList, statusDropdown, usernameInput, this
+            socket, 
+            generalMessageInput, generalSendButton, generalChatArea,
+            messageInput, sendButton, chatArea, 
+            userList, statusDropdown, usernameInput, 
+            this
         );
 
         // Temporizador para intentos automáticos de reconexión
@@ -227,7 +272,7 @@ public slots:
      * se establece la conexión con el servidor.
      */
     void onConnected() {
-        statusLabel->setText("Conectado al Chat");
+        statusLabel->setText("Bienvenid@ " + usernameInput->text());
         reconnectTimer->stop();  // Detener intentos de reconexión
         statusDropdown->setEnabled(true);  // Habilitar selección de estado
     
@@ -238,14 +283,17 @@ public slots:
         connectButton->hide();
     
         // Mostrar la interfaz de chat
+        generalChatLabel->show();
+        generalChatArea->show();
+        generalMessageInput->show();
+        generalSendButton->show();
+        chatLabel->show();
         chatArea->show();
         userList->show();
         messageInput->show();
         sendButton->show();
         optionsButton->show();
         statusDropdown->show();
-    
-        chatArea->append("Conectado al chat!");
     }    
 
     /**
@@ -316,6 +364,11 @@ private:
     QLineEdit *usernameInput;       // Campo para nombre de usuario
     QPushButton *connectButton;     // Botón para conectar
     QPushButton *optionsButton;     // Botón para mostrar opciones
+    QLabel *generalChatLabel;       // Etiqueta para reconocer el área de chat general
+    QLabel *chatLabel;              // Etiqueta para reconocer el área de chat
+    QTextEdit *generalChatArea;            // Área de visualización de mensajes en chat general
+    QLineEdit *generalMessageInput;        // Campo para escribir mensajes en chat general
+    QPushButton *generalSendButton;        // Botón para enviar mensajes en chat general
     QTextEdit *chatArea;            // Área de visualización de mensajes
     QLineEdit *messageInput;        // Campo para escribir mensajes
     QPushButton *sendButton;        // Botón para enviar mensajes
