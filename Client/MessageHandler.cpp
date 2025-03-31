@@ -26,12 +26,12 @@ unordered_map<string, string> userStates;
 MessageHandler::MessageHandler(QWebSocket& socket, 
     QLineEdit* generalInput, QPushButton* generalButton, QTextEdit* generalChatArea,
     QLineEdit* input, QPushButton* button, QTextEdit* chatArea, 
-    QComboBox* userList, QComboBox* stateList, QLineEdit* usernameInput, 
+    QComboBox* userList, QComboBox* stateList, QLineEdit* usernameInput,  QLabel* notificationLabel, QTimer* notificationTimer,
     QObject* parent)
     : QObject(parent), socket(socket), 
     generalMessageInput(generalInput), generalSendButton(generalButton), generalChatArea(generalChatArea),
     messageInput(input), sendButton(button), chatArea(chatArea), 
-    userList(userList), stateList(stateList), usernameInput(usernameInput), 
+    userList(userList), stateList(stateList), usernameInput(usernameInput), notificationLabel(notificationLabel), notificationTimer(notificationTimer),
     m_userInfoCallback(nullptr) { 
     
     actualUser = ""; // Espacio para registrar el nombre del usuario actual
@@ -335,7 +335,9 @@ void MessageHandler::receiveMessage(const QString& message) {
             quint8 status = static_cast<quint8>(data[pos]);
             pos += 1;  // Avanzar posición
 
-            userList->addItem(username);  // Añadir a la lista
+            if (username != actualUser) {
+                userList->addItem(username);  //Añadir a la lista
+            } 
             
             // Actualizar estado si es el usuario actual
             if (username == userList->currentText()) {
@@ -370,16 +372,19 @@ void MessageHandler::receiveMessage(const QString& message) {
     else if (messageType == 53) {  // Nuevo usuario conectado
         quint8 usernameLen = static_cast<quint8>(data[1]);
         QString username = QString::fromUtf8(data.mid(2, usernameLen));
+        notificationLabel->setText(username + " se ha registrado!");
+        notificationLabel->show();
+        notificationTimer->start(5000);
         userList->addItem(username);  // Añadir a la lista de usuarios
     }
     else if (messageType == 54) {  // Cambio de estado de usuario
         quint8 usernameLen = static_cast<quint8>(data[1]);
         QString username = QString::fromUtf8(data.mid(2, usernameLen));
         quint8 newStatus = static_cast<quint8>(data[2 + usernameLen]);
-        
-        // Mostrar notificación del cambio de estado
-        generalChatArea->append("**" + username + " ha cambiado su estado a " + 
-                        QString::fromStdString(get_status_string(newStatus)) + "**");
+        notificationLabel->setText(username + " ha cambiado su estado a " + 
+                        QString::fromStdString(get_status_string(newStatus)));
+        notificationLabel->show();
+        notificationTimer->start(5000);
     }
     else if (messageType == 55) {  // Mensaje normal de chat
 

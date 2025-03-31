@@ -385,6 +385,36 @@ void send_info(const string& requester, const vector<uint8_t>& data) {
 }
 
 /**
+ * Notifica a todos los usuarios conectados que hay un nuevo usuario en línea.
+ * Formato mensaje: [53, longitud_nombre, nombre, estado]
+ * 
+ * @param username Nombre del nuevo usuario
+ */
+ void broadcast_new_user(const std::string& username) {
+    std::vector<uint8_t> message;
+
+    message.push_back(53);  // Tipo 53: Nuevo usuario
+    message.push_back(static_cast<uint8_t>(username.size()));  // Longitud del nombre
+
+    // Agregar el nombre de usuario
+    message.insert(message.end(), username.begin(), username.end());
+
+    message.push_back(1);  // Estado inicial: Activo
+
+    // Enviar a todos los usuarios activos
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    for (auto& [user, client] : clients) {
+        if (client.status == 1 && client.ws && client.ws->is_open()) {
+            try {
+                client.ws->write(net::buffer(message));
+            } catch (const boost::system::system_error& e) {
+                std::cerr << "⚠️ No se pudo enviar mensaje a " << user << ": " << e.what() << std::endl;
+            }
+        }
+    }
+}
+
+/**
  * Procesa los mensajes recibidos de los clientes según su tipo.
  * Cada tipo de mensaje tiene un código específico:
  * 1: Solicitud de lista de usuarios
@@ -433,35 +463,6 @@ void handle_message(const string& sender, const vector<uint8_t>& data) {
     }
 }
 
-/**
- * Notifica a todos los usuarios conectados que hay un nuevo usuario en línea.
- * Formato mensaje: [53, longitud_nombre, nombre, estado]
- * 
- * @param username Nombre del nuevo usuario
- */
-void broadcast_new_user(const std::string& username) {
-    std::vector<uint8_t> message;
-
-    message.push_back(53);  // Tipo 53: Nuevo usuario
-    message.push_back(static_cast<uint8_t>(username.size()));  // Longitud del nombre
-
-    // Agregar el nombre de usuario
-    message.insert(message.end(), username.begin(), username.end());
-
-    message.push_back(1);  // Estado inicial: Activo
-
-    // Enviar a todos los usuarios activos
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    for (auto& [user, client] : clients) {
-        if (client.status == 1 && client.ws && client.ws->is_open()) {
-            try {
-                client.ws->write(net::buffer(message));
-            } catch (const boost::system::system_error& e) {
-                std::cerr << "⚠️ No se pudo enviar mensaje a " << user << ": " << e.what() << std::endl;
-            }
-        }
-    }
-}
 
 /**
  * Verifica que la solicitud HTTP contenga los encabezados necesarios para establecer

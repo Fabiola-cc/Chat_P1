@@ -31,6 +31,9 @@ private:
     QTimer *reconnectTimer;
     MessageHandler *messageHandler;
     QPushButton *optionsButton;
+    QLabel *notificationLabel;
+    QTimer *notificationTimer;
+    QTimer *inactivityTimer;
 
 private slots:
     void onUserSelected(const QString& selectedUser);

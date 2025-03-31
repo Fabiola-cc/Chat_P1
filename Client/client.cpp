@@ -78,9 +78,20 @@ public:
         statusDropdown->addItem("Ocupado", 2);      // Estado ocupado (valor 2)
         statusDropdown->addItem("Inactivo", 3);     // Estado inactivo (valor 3)
         statusDropdown->setEnabled(false);          // Deshabilitado hasta que se conecte
-        statusDropdown->hide();                     // Oculto hasta que se conecte
+        statusDropdown->hide();
+        notificationLabel = new QLabel(this);
+        notificationLabel->setStyleSheet("color: blue; font-weight: bold;"); // Estilo azul
+        notificationLabel->hide();                     // Oculto hasta que se conecte
+
+        notificationTimer = new QTimer(this);
+        notificationTimer->setSingleShot(true); // Solo se ejecuta una vez por evento
+        connect(notificationTimer, &QTimer::timeout, this, [this]() {
+            notificationLabel->clear();
+            notificationLabel->hide();
+        });
 
         mainLayout->addWidget(statusDropdown);
+        mainLayout->addWidget(notificationLabel);
 
         // Chat IZQUIERDO
         generalChatLabel = new QLabel("Chat general: ", this);
@@ -140,14 +151,19 @@ public:
             socket, 
             generalMessageInput, generalSendButton, generalChatArea,
             messageInput, sendButton, chatArea, 
-            userList, statusDropdown, usernameInput, 
+            userList, statusDropdown, usernameInput, notificationLabel, notificationTimer,
             this
         );
 
-        // Temporizador para intentos automáticos de reconexión
-        reconnectTimer = new QTimer(this);
-        reconnectTimer->setInterval(5000);  // Intervalo de 5 segundos entre intentos
-        connect(reconnectTimer, &QTimer::timeout, this, &ChatClient::attemptReconnect);
+        inactivityTimer = new QTimer(this);
+        inactivityTimer->setInterval(20000); // 20 segundos
+        inactivityTimer->setSingleShot(true); // Solo se activa una vez tras la inactividad
+        connect(inactivityTimer, &QTimer::timeout, this, &ChatClient::setInactiveState);
+
+        connect(generalMessageInput, &QLineEdit::textChanged, this, &ChatClient::resetInactivityTimer);
+        connect(messageInput, &QLineEdit::textChanged, this, &ChatClient::resetInactivityTimer);
+        connect(userList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ChatClient::resetInactivityTimer);
+        connect(statusDropdown, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ChatClient::resetInactivityTimer);
     }
 
 public slots:
@@ -246,6 +262,12 @@ public slots:
         messageInput->hide();
         sendButton->hide();
         optionsButton->hide();
+        generalChatLabel->hide();
+        generalChatArea->hide();                    
+        generalMessageInput->hide();               
+        generalSendButton->hide(); 
+        statusDropdown->hide();   
+        chatLabel->hide(); 
     }
 
     /**
@@ -273,7 +295,6 @@ public slots:
      */
     void onConnected() {
         statusLabel->setText("Bienvenid@ " + usernameInput->text());
-        reconnectTimer->stop();  // Detener intentos de reconexión
         statusDropdown->setEnabled(true);  // Habilitar selección de estado
 
         // Desconectar la selección de usuarios para no llamar a su historial inmediatamente
@@ -307,6 +328,8 @@ public slots:
         // Registrar nombre de usuario
         messageHandler->setActualUser(usernameInput->text());
 
+        inactivityTimer->start(20000);
+
         // Reconectar cuando todo está listo
         QTimer::singleShot(500, this, [this]() {
             // Asegurarse de que no haya conexiones previas antes de conectar de nuevo
@@ -337,6 +360,22 @@ public slots:
             chatArea->clear();  // Limpiar antes de mostrar los mensajes
             // Cargar historial del usuario/canal seleccionado
             messageHandler->requestChatHistory(selectedUser);
+        }
+    }
+
+    void resetInactivityTimer() {
+        inactivityTimer->start(20000); 
+    }
+    
+    void setInactiveState() {
+        if (messageHandler && !usernameInput->text().isEmpty()) {
+            if (statusDropdown->currentIndex() == 2) {
+                notificationLabel->setText("Sigues Inactivo");
+                notificationLabel->show();
+                notificationTimer->start(10000);
+            } else {
+                statusDropdown->setCurrentIndex(2); // Índice 2 = "Inactivo" 
+            }
         }
     }
 
@@ -378,7 +417,6 @@ private:
     QWebSocket socket;              // Socket para la comunicación WebSocket
     QLabel *statusLabel;            // Etiqueta para mostrar el estado de la conexión
     QLabel *errorLabel;             // Etiqueta para mostrar mensajes de error
-    QTimer *reconnectTimer;         // Temporizador para intentos de reconexión
     QLineEdit *hostInput;           // Campo para dirección del servidor
     QLineEdit *portInput;           // Campo para puerto del servidor
     QLineEdit *usernameInput;       // Campo para nombre de usuario
@@ -395,6 +433,9 @@ private:
     QComboBox *userList;            // Lista de usuarios/canales
     QComboBox *statusDropdown;      // Selector de estado del usuario
     MessageHandler *messageHandler; // Manejador de mensajes
+    QLabel *notificationLabel;
+    QTimer *notificationTimer;
+    QTimer *inactivityTimer;
 };
 
 /**

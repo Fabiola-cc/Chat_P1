@@ -2,6 +2,8 @@
 #define MESSAGEHANDLER_H
 
 #include <QObject>
+#include <QLabel>
+#include <QTimer>
 #include <QWebSocket>
 #include <QLineEdit>
 #include <QPushButton>
@@ -16,7 +18,7 @@ public:
     explicit MessageHandler(QWebSocket& socket, 
         QLineEdit* generalInput, QPushButton* generalButton, QTextEdit* generalChatArea,
         QLineEdit* input, QPushButton* button, QTextEdit* chatArea, 
-        QComboBox* userList, QComboBox* stateList, QLineEdit* usernameInput,
+        QComboBox* userList, QComboBox* stateList, QLineEdit* usernameInput, QLabel* notificationLabel, QTimer* notificationTimer,
         QObject* parent = nullptr);
 
     void requestChatHistory(const QString& chatName);
@@ -47,6 +49,8 @@ private:
     QComboBox* userList;
     QComboBox* stateList;
     QLineEdit* usernameInput;
+    QLabel* notificationLabel;
+    QTimer* notificationTimer;
 
     // Creador de mensajes para el server
     QByteArray buildMessage(quint8 type, const QString& param1, const QString& param2 = "");
