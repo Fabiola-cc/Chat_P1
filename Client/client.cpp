@@ -156,7 +156,7 @@ public:
         );
 
         inactivityTimer = new QTimer(this);
-        inactivityTimer->setInterval(20000); // 20 segundos
+        inactivityTimer->setInterval(40000); // 40 segundos
         inactivityTimer->setSingleShot(true); // Solo se activa una vez tras la inactividad
         connect(inactivityTimer, &QTimer::timeout, this, &ChatClient::setInactiveState);
 
@@ -185,9 +185,7 @@ public slots:
         }
     
         QUrl httpURL = QUrl(QString("http://%1:%2?name=%3").arg(host, port, username));
-
         QNetworkRequest request(httpURL);
-
     
         auto *response = http.get(QNetworkRequest(httpURL));
         connect(response, &QNetworkReply::finished, this, [this, response, host, port, username](){
@@ -309,6 +307,7 @@ public slots:
      * se establece la conexión con el servidor.
      */
     void onConnected() {
+        
         statusLabel->setText("Bienvenid@ " + usernameInput->text());
         statusDropdown->setEnabled(true);  // Habilitar selección de estado
 
@@ -320,7 +319,7 @@ public slots:
         portInput->hide();
         usernameInput->hide();
         connectButton->hide();
-    
+        
         // Mostrar la interfaz de chat general
         generalChatLabel->show();
         generalChatArea->show();
@@ -343,12 +342,11 @@ public slots:
         // Registrar nombre de usuario
         messageHandler->setActualUser(usernameInput->text());
 
-        inactivityTimer->start(20000);
+        inactivityTimer->start(40000);
 
         // Reconectar cuando todo está listo
         QTimer::singleShot(500, this, [this]() {
             // Asegurarse de que no haya conexiones previas antes de conectar de nuevo
-            disconnect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);
             connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);
         });
     }    
@@ -371,7 +369,6 @@ public slots:
     void onUserSelected(const QString& selectedUser) {
         
         if (!selectedUser.isEmpty()) {
-            cout << "LLAMADA para usuario: " << selectedUser.toStdString() << endl;
             chatArea->clear();  // Limpiar antes de mostrar los mensajes
             // Cargar historial del usuario/canal seleccionado
             messageHandler->requestChatHistory(selectedUser);
@@ -379,7 +376,7 @@ public slots:
     }
 
     void resetInactivityTimer() {
-        inactivityTimer->start(20000); 
+        inactivityTimer->start(40000); 
     }
     
     void setInactiveState() {
