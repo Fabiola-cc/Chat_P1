@@ -356,6 +356,29 @@ void MessageHandler::receiveMessage(const QString& message) {
             quint8 status = static_cast<quint8>(data[pos]);
             pos += 1;  // Avanzar posición
 
+            // Convert numeric status to string representation
+            QString user_status;
+            switch (status) {
+                case 0:
+                    user_status = "Desconectado";
+                    break;
+                case 1:
+                    user_status = "Activo";
+                    break;
+                case 2:
+                    user_status = "Ocupado";
+                    break;
+                case 3:
+                    user_status = "Inactivo";
+                    break;
+                default:
+                    user_status = "Desconocido";
+                    break;
+            }
+
+            // Store both in your data structure - for example:
+            userStates[username.toStdString()] = user_status.toStdString();
+
             if (username != actualUser) {
                 userList->addItem(username);  //Añadir a la lista
             } 
