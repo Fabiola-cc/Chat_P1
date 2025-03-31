@@ -34,6 +34,7 @@ private slots:
     void onStateChanged(int index);
     void showChatMessages(const QString& user2);
     QString get_chat_id(const QString& user2);
+    void storeMessage(const QString& sender, const QString& message);
 
 private:
     QWebSocket& socket;

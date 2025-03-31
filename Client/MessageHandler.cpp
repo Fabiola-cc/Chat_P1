@@ -246,11 +246,32 @@ QString MessageHandler::get_chat_id(const QString& user2) {
 }
 
 /**
+ * Guarda un mensaje específico en el chat establecido
+ * 
+ * @param sender usuario que mandó el mensaje
+ * @param message mensaje a guardar
+ */
+void MessageHandler::storeMessage(const QString& sender, const QString& message) {
+    // Obtener el chat_id en formato QString o mantenerlo si es "~"
+    QString chat_id_qt = sender != "~" ? get_chat_id(sender) : sender;
+    std::string chat_id_std = chat_id_qt.toStdString();
+    
+    // Verificar si el mensaje ya está en el historial local
+    auto& chatHistory = localChatHistory[chat_id_std];
+    if (std::find(chatHistory.begin(), chatHistory.end(),
+                  std::make_pair(sender.toStdString(), message.toStdString())) == chatHistory.end()) {
+        // Agregar mensaje al historial local
+        chatHistory.emplace_back(sender.toStdString(), message.toStdString());
+    }
+}
+
+/**
  * Muestra todos los mensajes de un chat específico
  * 
  * @param user2 Segunda persona en conversación (puede ser el chat general)
  */
 void MessageHandler::showChatMessages(const QString& user2) {
+    if (stateList->currentText() == "Ocupado") return; // No mostrar a un usuario ocupado
     // Determinar si es chat general o personal
     bool isGeneralChat = (user2 == "~");
     
@@ -385,6 +406,20 @@ void MessageHandler::receiveMessage(const QString& message) {
                         QString::fromStdString(get_status_string(newStatus)));
         notificationLabel->show();
         notificationTimer->start(5000);
+
+        if (actualUser != username) return; // Solo actúa si el usuario actual es el afectado
+        switch (newStatus) { 
+            case 1: // Recuperar los mensajes si se cambia a activo
+                generalChatArea->clear();
+                showChatMessages("~");
+                chatArea->clear();
+                showChatMessages(userList->currentText());
+                break;
+            case 2:
+                requestChatHistory("~");
+                requestChatHistory(userList->currentText());
+                break;
+        }
     }
     else if (messageType == 55) {  // Mensaje normal de chat
 
@@ -395,13 +430,30 @@ void MessageHandler::receiveMessage(const QString& message) {
         // Extraer contenido del mensaje
         quint8 messageLen = static_cast<quint8>(data[2 + usernameLen]);
         QString content = QString::fromUtf8(data.mid(3 + usernameLen, messageLen));
-        
-        // Mostrar mensaje en el área de chat
-        username = actualUser == username? "Tú" : username;
-        if (username == "~") {
+
+        if (stateList->currentText() == "Ocupado") {
+            storeMessage(username, content);
+            return;
+        }
+    
+        // Definir nombre de usuario en la UI
+        QString displayUsername = (actualUser == username) ? "Tú" : username;
+    
+        // Si es el chat general, solo mostramos el contenido
+        if (displayUsername == "~") {
             generalChatArea->append(content);
+            return;
+        }
+    
+        // Determinar el chat en el que estamos
+        QString actualChat = userList->currentText();
+    
+        if (displayUsername == "Tú" || displayUsername == actualChat) {
+            chatArea->append(displayUsername + ": " + content);
         } else {
-            chatArea->append(username + ": " + content);
+            notificationLabel->setText("Recibiste un nuevo mensaje de: " + username);
+            notificationLabel->show();
+            notificationTimer->start(5000);
         }
         
     } 
