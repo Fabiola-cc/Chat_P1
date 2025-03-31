@@ -379,7 +379,7 @@ void send_info(const string& requester, const vector<uint8_t>& data) {
 
     // Envío de respuesta al solicitante
     auto requester_it = clients.find(requester);
-    if (requester_it != clients.end() && requester_it->second.status == 1 && requester_it->second.ws->is_open()) {
+    if (requester_it != clients.end() && requester_it->second.ws->is_open()) {
         requester_it->second.ws->write(net::buffer(response));
     }
 }
