@@ -23,6 +23,7 @@ public:
     void requestChangeState(const QString& username, uint8_t newStatus);
     void requestUserInfo(const QString& username);
     void setUserInfoCallback(std::function<void(const QString&, int)> callback);
+    void setActualUser(const QString& username);
 
 private slots:
     void sendMessage();         // Enviar mensaje en chat personal
@@ -46,10 +47,16 @@ private:
     QComboBox* userList;
     QComboBox* stateList;
     QLineEdit* usernameInput;
+
+    // Creador de mensajes para el server
     QByteArray buildMessage(quint8 type, const QString& param1, const QString& param2 = "");
     
     // Callback para manejar información de usuario
     std::function<void(const QString&, int)> m_userInfoCallback;
+
+    //Otras variables
+    QString actualUser;
+    QString requestedHistory;
 };
 
 #endif // MESSAGEHANDLER_H

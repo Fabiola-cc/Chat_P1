@@ -272,11 +272,19 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data) {
         chatHistory[chat_id].emplace_back(sender, message);
     }    
 
+    // Trabajar con chat general
+    string New_sender = sender;
+    if (recipient == "~"){
+        New_sender = recipient;
+        message = sender + ": " + message;
+        messageLen = message.size();
+    }
+
     // Preparar mensaje para reenvío
     vector<uint8_t> response;
     response.push_back(55);  // Código 55: Mensaje de chat
-    response.push_back(sender.size());
-    response.insert(response.end(), sender.begin(), sender.end());
+    response.push_back(New_sender.size());
+    response.insert(response.end(), New_sender.begin(), New_sender.end());
     response.push_back(messageLen);
     response.insert(response.end(), message.begin(), message.end());
 

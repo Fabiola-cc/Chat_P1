@@ -33,7 +33,7 @@ public:
      * Inicializa la interfaz gráfica y configura las conexiones entre señales y slots.
      */
     ChatClient(QWidget *parent = nullptr) : QWidget(parent) {
-        resize(800, 600); // Establecer tamaño inicial
+        resize(800, 400); // Establecer tamaño inicial
         setWindowTitle("Chat");
 
         // Layout principal horizontal para colocar los dos paneles lado a lado
@@ -275,18 +275,27 @@ public slots:
         statusLabel->setText("Bienvenid@ " + usernameInput->text());
         reconnectTimer->stop();  // Detener intentos de reconexión
         statusDropdown->setEnabled(true);  // Habilitar selección de estado
-    
+
+        // Desconectar la selección de usuarios para no llamar a su historial inmediatamente
+        disconnect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);
+        
         // Ocultar controles de conexión
         hostInput->hide();
         portInput->hide();
         usernameInput->hide();
         connectButton->hide();
     
-        // Mostrar la interfaz de chat
+        // Mostrar la interfaz de chat general
         generalChatLabel->show();
         generalChatArea->show();
         generalMessageInput->show();
         generalSendButton->show();
+
+        // Solicitar historial de chat general
+        generalChatArea->clear();  // Limpiar antes de mostrar los mensajes
+        messageHandler->requestChatHistory("~"); // Cargar historial del canal
+
+        // Mostrar la interfaz de chat personal
         chatLabel->show();
         chatArea->show();
         userList->show();
@@ -294,6 +303,14 @@ public slots:
         sendButton->show();
         optionsButton->show();
         statusDropdown->show();
+
+        // Registrar nombre de usuario
+        messageHandler->setActualUser(usernameInput->text());
+
+        // Reconectar cuando todo está listo
+        QTimer::singleShot(500, this, [this]() {
+            connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);
+        });
     }    
 
     /**

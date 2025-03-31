@@ -32,7 +32,10 @@ MessageHandler::MessageHandler(QWebSocket& socket,
     generalMessageInput(generalInput), generalSendButton(generalButton), generalChatArea(generalChatArea),
     messageInput(input), sendButton(button), chatArea(chatArea), 
     userList(userList), stateList(stateList), usernameInput(usernameInput), 
-    m_userInfoCallback(nullptr) {  
+    m_userInfoCallback(nullptr) { 
+    
+    actualUser = ""; // Espacio para registrar el nombre del usuario actual
+    requestedHistory = "~"; // Bandera de quién está solicitando el historial de chat
 
     // Conectar señales y slots para el chat personal
     connect(sendButton, &QPushButton::clicked, this, &MessageHandler::sendMessage);
@@ -43,7 +46,16 @@ MessageHandler::MessageHandler(QWebSocket& socket,
 
     // Conectar cambios de estado
     connect(stateList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MessageHandler::onStateChanged);
+
 }
+
+/**
+ * Guarda el nombre de usuario actual
+ */
+void MessageHandler::setActualUser(const QString& username) {
+    actualUser = username.trimmed();
+}
+
 
 /**
  * @brief Convierte un código numérico de estado a su representación textual
@@ -110,6 +122,7 @@ void MessageHandler::requestUserInfo(const QString& username) {
  * @param chatName Nombre del chat (un usuario o "~" para el chat general)
  */
 void MessageHandler::requestChatHistory(const QString& chatName) {
+    requestedHistory = chatName;
     if (chatName.isEmpty()) return;  // Validar entrada
 
     // Crear mensaje binario para solicitar historial
@@ -152,11 +165,10 @@ void MessageHandler::onStateChanged(int index) {
 
     // Obtener el valor numérico asociado al índice seleccionado
     uint8_t newStatus = static_cast<uint8_t>(stateList->itemData(index).toInt());
-    QString username = usernameInput->text().trimmed();  // Obtener nombre de usuario actual
 
     // Enviar solicitud de cambio de estado si hay un usuario válido
-    if (!username.isEmpty()) {
-        requestChangeState(username, newStatus);
+    if (!actualUser.isEmpty()) {
+        requestChangeState(actualUser, newStatus);
     }
 }
 
@@ -225,7 +237,7 @@ void MessageHandler::sendGeneralMessage() {
  * @return QString con la clave única de la conversación.
  */
 QString MessageHandler::get_chat_id(const QString& user2) {
-    QString user1 = usernameInput->text().trimmed();
+    QString user1 = actualUser;
     if (user1 < user2) {
         return user1 + "-" + user2;  // Orden lexicográfico
     } else {
@@ -245,7 +257,7 @@ void MessageHandler::showChatMessages(const QString& user2) {
     // Seleccionar el área de chat adecuada
     QTextEdit* targetChatArea = isGeneralChat ? generalChatArea : chatArea;
 
-    string chat_id = isGeneralChat ? get_chat_id(user2).toStdString() : user2.toStdString();
+    string chat_id = isGeneralChat ? user2.toStdString() : get_chat_id(user2).toStdString();
 
     // Verificar si existe historial para el chat dado
     auto it = localChatHistory.find(chat_id);
@@ -253,8 +265,9 @@ void MessageHandler::showChatMessages(const QString& user2) {
         for (const auto& pair : it->second) {
             const auto& sender = pair.first;
             const auto& content = pair.second;
-        
-            targetChatArea->append(QString::fromStdString(sender) + ": " + QString::fromStdString(content));
+
+            string displaySender = actualUser.toStdString() == sender? "Tú" : sender;
+            targetChatArea->append(QString::fromStdString(displaySender) + ": " + QString::fromStdString(content));
         }
     }
 }
@@ -369,7 +382,6 @@ void MessageHandler::receiveMessage(const QString& message) {
                         QString::fromStdString(get_status_string(newStatus)) + "**");
     }
     else if (messageType == 55) {  // Mensaje normal de chat
-        QString currentUser = usernameInput->text().trimmed();  // Obtener nombre de usuario actual
 
         // Extraer remitente
         quint8 usernameLen = static_cast<quint8>(data[1]);
@@ -380,16 +392,17 @@ void MessageHandler::receiveMessage(const QString& message) {
         QString content = QString::fromUtf8(data.mid(3 + usernameLen, messageLen));
         
         // Mostrar mensaje en el área de chat
-        if (currentUser == username) username = "Tú";
+        username = actualUser == username? "Tú" : username;
+        if (username == "~") {
+            generalChatArea->append(content);
+        } else {
+            chatArea->append(username + ": " + content);
+        }
         
-        generalChatArea->append(username + ": " + content);
     } 
     else if (messageType == 56) {  // Historial de chat recibido
         quint8 numMessages = static_cast<quint8>(data[1]);  // Número de mensajes
         int pos = 2;  // Posición para leer datos
-        
-        // De qué chat es el historial
-        QString selectedUser = userList->currentText();
 
         for (quint8 i = 0; i < numMessages; i++) {
 
@@ -404,10 +417,10 @@ void MessageHandler::receiveMessage(const QString& message) {
             pos += 1 + messageLen;  // Avanzar posición
     
             // Construir la clave del chat para el historial
-            QString chat_id_qt = selectedUser.toStdString() != "~" ? get_chat_id(selectedUser) : selectedUser;;
-    
+            QString chat_id_qt = requestedHistory.toStdString() != "~" ? get_chat_id(requestedHistory) : requestedHistory;;
             // Convertir a string solo para acceder a unordered_map
             string chat_id_std = chat_id_qt.toStdString();
+
             // Verificar si el mensaje ya está en el historial local
             auto& chatHistory = localChatHistory[chat_id_std];
             if (find(chatHistory.begin(), chatHistory.end(),
@@ -416,7 +429,7 @@ void MessageHandler::receiveMessage(const QString& message) {
                 chatHistory.emplace_back(username.toStdString(), content.toStdString());
             }            
         }
-        showChatMessages(selectedUser);
+        showChatMessages(requestedHistory);
     }    
     else {
         // Tipo de mensaje desconocido
