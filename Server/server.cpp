@@ -77,13 +77,13 @@ std::string get_status_string(int status) {
  */
 void print_users() {
     std::lock_guard<std::mutex> lock(clients_mutex);
-    std::cout << "Usuarios registrados [" << clients.size() << "]: ";
+    cout << "Usuarios registrados [" << clients.size() << "]: ";
     for (const auto& [username, session] : clients) {
-        std::cout << username << " (Estado: " << get_status_string(session.status)
+        cout << username << " (Estado: " << get_status_string(session.status)
                   << ", WebSocket: " << (session.ws && session.ws->is_open() ? "Abierto" : "Cerrado") 
                   << ") | ";
     }
-    std::cout << std::endl;
+    cout << endl;
 }
 
 /** 
@@ -123,6 +123,7 @@ string get_chat_id(const string& user1, const string& user2) {
 
     // Enviar el buffer completo
     ws.write(net::buffer(response));
+    cout << "📜📢 Respuesta enviada" << endl;
 }
 
 
@@ -139,7 +140,7 @@ string get_chat_id(const string& user1, const string& user2) {
 
     // Validar longitud mínima del mensaje
     if (data.size() < 3) {
-        std::cerr << "❌ Error: Mensaje demasiado corto para cambiar estado." << std::endl;
+        cerr << "❌ Error: Mensaje demasiado corto para cambiar estado." << endl;
         return;
     }
 
@@ -147,7 +148,7 @@ string get_chat_id(const string& user1, const string& user2) {
 
     // Validar que el mensaje contiene el nombre completo
     if (username_len + 2 > data.size()) {
-        std::cerr << "❌ Error: El tamaño del nombre de usuario es incorrecto." << std::endl;
+        cerr << "❌ Error: El tamaño del nombre de usuario es incorrecto." << endl;
         return;
     }
 
@@ -160,7 +161,7 @@ string get_chat_id(const string& user1, const string& user2) {
         message.push_back(50);                  // Código 50: Error
         message.push_back(2);                   // Estado inválido
         
-        std::cerr << "❌ Error: Estado del usuario inválido." << std::endl;
+        cerr << "❌ Error: Estado del usuario inválido." << endl;
     }
 
     // Cambiar el estado del usuario
@@ -168,8 +169,8 @@ string get_chat_id(const string& user1, const string& user2) {
     auto it = clients.find(received_username);
     if (it != clients.end()) {
         it->second.status = new_status;
-        std::cout << "✅ El usuario " << received_username << " cambió su estado a " 
-                  << static_cast<int>(new_status) << std::endl;
+        cout << "📢 El usuario " << received_username << " cambió su estado a " 
+                  << static_cast<int>(new_status) << endl;
 
         // Construir el mensaje para el cambio de estado
         message.push_back(54);  // Tipo de mensaje 54: Notificación de cambio de estado
@@ -183,8 +184,9 @@ string get_chat_id(const string& user1, const string& user2) {
                 client.second.ws->write(net::buffer(message));  // Enviar el mensaje
             }
         }
+        cout << "🫥📢 Respuesta enviada" << endl;
     } else {
-        std::cerr << "❌ Error: Usuario no encontrado." << std::endl;
+        cerr << "❌ Error: Usuario no encontrado." << endl;
     }
 }
 
@@ -232,6 +234,7 @@ string get_chat_id(const string& user1, const string& user2) {
 
     // Enviar respuesta
     ws.write(net::buffer(response));
+    cout << "🕘📢 Respuesta con historial enviada " << chat_id << endl;
 }
 
 /**
@@ -295,6 +298,7 @@ string get_chat_id(const string& user1, const string& user2) {
     // Enviar copia al emisor
     if (clients.find(sender) != clients.end() && clients[sender].status == 1) {
         clients[sender].ws->write(net::buffer(response));
+        cout << "💬📢 Mensaje enviado al emisor" << endl;
     }
 
     // Si el destinatario es "~", es un mensaje para todos (broadcast)
@@ -304,10 +308,12 @@ string get_chat_id(const string& user1, const string& user2) {
                 client.ws->write(net::buffer(response));
             }
         }
+        cout << "💬📢 Mensaje enviado al todos" << endl;
     } else {
         // Enviar al destinatario específico
         if (clients.find(recipient) != clients.end() && clients[recipient].status != 0) {
             clients[recipient].ws->write(net::buffer(response));
+            cout << "💬📢 Mensaje enviado al receptor" << endl;
         } else {
             vector<unsigned char> error;
             if (clients.find(recipient) == clients.end())
@@ -370,7 +376,7 @@ string get_chat_id(const string& user1, const string& user2) {
         response.insert(response.end(), targetUsername.begin(), targetUsername.end());
         response.push_back(it->second.status);
         
-        cout << "✅ Información de usuario " << targetUsername << " enviada a " << requester << endl;
+        cout << "ℹ️ Información de usuario " << targetUsername << " enviada a " << requester << endl;
     } else {
         response.push_back(static_cast<unsigned char>(50));  // Código 50: Error
         response.push_back(static_cast<unsigned char>(1));   // Usuario no existente
@@ -384,6 +390,7 @@ string get_chat_id(const string& user1, const string& user2) {
     auto requester_it = clients.find(requester);
     if (requester_it != clients.end() && requester_it->second.ws->is_open()) {
         requester_it->second.ws->write(net::buffer(response));
+        cout << "ℹ️📢 Respuesta enviada a " << requester << endl;
     }
 }
 
@@ -412,10 +419,11 @@ string get_chat_id(const string& user1, const string& user2) {
             try {
                 client.ws->write(net::buffer(message));
             } catch (const boost::system::system_error& e) {
-                std::cerr << "⚠️ No se pudo enviar mensaje a " << user << ": " << e.what() << std::endl;
+                cerr << "⚠️ No se pudo enviar mensaje a " << user << ": " << e.what() << endl;
             }
         }
     }
+    cout << "😁📢 Respuesta enviada a todos los usuarios"<< endl;
 }
 
 /**
@@ -438,33 +446,42 @@ string get_chat_id(const string& user1, const string& user2) {
     switch (messageType) {
         case 1:  // Solicitud de lista de usuarios
             {
+                cout << "📜 [" << std::this_thread::get_id() << "] Solicitud de lista de usuarios de: " << sender << endl;
                 lock_guard<mutex> lock(clients_mutex);
                 if (clients.find(sender) != clients.end() && clients[sender].status == 1) {
                     send_users_list(*clients[sender].ws);
+                } else {
+                    cout << "📜🔴 [" << std::this_thread::get_id() << "] No se pudo enviar la lista de usuarios (usuario no encontrado o no disponible)." << endl;
                 }
             }
             break;
         case 2:  // Solicitud de información de usuario
+            cout << "ℹ️ [" << std::this_thread::get_id() << "] Solicitud de info de usuario de: " << sender << endl;
             send_info(sender, data);
             break;
         case 3:  // Cambio de estado
+            cout << "🫥 [" << std::this_thread::get_id() << "] Cambio de estado solicitado por: " << sender << endl;
             change_state(data);
             break;
         case 4:  // Mensaje de chat
+            cout << "💬 [" << std::this_thread::get_id() << "] Mensaje de chat recibido de: " << sender << endl;
             process_chat_message(sender, data);
             break;
         case 5:  // Solicitud de historial de chat
             {
+                cout << "🕘 [" << std::this_thread::get_id() << "] Solicitud de historial de: " << sender << endl;
                 lock_guard<mutex> lock(clients_mutex);
                 if (clients.find(sender) != clients.end() && clients[sender].status == 1) {
                     get_chat_history(sender, data, *clients[sender].ws);
+                } else {
+                    cout << "🕘🔴 [" << std::this_thread::get_id() << "] No se pudo recuperar historial de chat (usuario no encontrado o no disponible)." << endl;
                 }
             }
             break;
         default:
-            cerr << "⚠️ Mensaje no reconocido: " << (int)messageType << endl;
+            cerr << "⚠️ [" << std::this_thread::get_id() << "] Mensaje no reconocido: " << (int)messageType << endl;
             break;
-    }
+    }    
 }
 
 
@@ -489,7 +506,7 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
         http::response<http::string_body> res{http::status::bad_request, req.version()};
         res.body() = "Encabezados WebSocket incorrectos.";
         http::write(socket, res);
-        std::cout << "Encabezados WebSocket incorrectos. " << std::endl;
+        cout << "Encabezados WebSocket incorrectos. " << endl;
         return false; // Indica que la verificación falló
     }
 
@@ -524,7 +541,7 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
 
             // Validación del nombre de usuario
             if (username.empty() || username == "~") {
-                std::cout << "❌ Nombre de usuario no permitido: " << username << "\n";
+                cout << "🧐 Nombre de usuario no permitido: " << username << "\n";
                 http::response<http::string_body> res{http::status::bad_request, req.version()};
                 res.body() = "Nombre de usuario no permitido.";
                 http::write(socket, res);
@@ -535,7 +552,7 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
             std::lock_guard<std::mutex> lock(clients_mutex);
             auto it = clients.find(username);
             if (it != clients.end() && it->second.status != 0) {
-                std::cout << "❌ Usuario ya está conectado: " << username << "\n";
+                cout << "😶‍🌫️ Usuario ya está conectado: " << username << "\n";
                 http::response<http::string_body> res{http::status::bad_request, req.version()};
                 res.body() = "Usuario ya está conectado.";
                 http::write(socket, res);
@@ -552,19 +569,19 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
         if (clients.find(username) == clients.end()) {
             // Caso 1: Usuario completamente nuevo
             clients[username] = {ws, 1, clientIP};  // Estado: Activo
-            std::cout << "✅ Nuevo usuario conectado: " << username<< " desde " << clientIP  << std::endl;
+            cout << "✅ Nuevo usuario conectado: " << username<< " desde " << clientIP  << endl;
             connectionAccepted = true;
         } else if (clients[username].status == 0) {
             // Caso 2: Usuario estaba desconectado y se reconecta
             clients[username] = {ws, 1};  // Estado: Activo
-            std::cout << "🔄 Usuario reconectado: " << username << " desde " << clientIP << std::endl;
+            cout << "🔄 Usuario reconectado: " << username << " desde " << clientIP << endl;
             connectionAccepted = true;
         }
 
         if (connectionAccepted) {
             // Aceptar la conexión WebSocket
             ws->accept(req);
-            std::cout << "🔗 Cliente conectado\n";
+            cout << "🔗 Cliente conectado\n";
             print_users();
             broadcast_new_user(username);
             send_users_list(*ws);
@@ -573,7 +590,7 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
         // Bucle principal de la sesión
         while (connectionAccepted) {
             if (!ws->is_open()) {
-                std::cout << "❌ Conexión WebSocket cerrada por el cliente: " << username << std::endl;
+                cout << "❌ Conexión WebSocket cerrada por el cliente: " << username << endl;
                 break;
             }
 
@@ -586,13 +603,14 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
                                                     boost::asio::buffer_cast<const unsigned char*>(data) + boost::asio::buffer_size(data));
 
             if (!message_data.empty()) {
+                cout<<"👀 Mensaje Recibido"<<endl;
                 handle_message(username, message_data);  // Procesar el mensaje
             }
         }
     } catch (const boost::system::system_error& e) {
-        std::cerr << "❌ Error de sistema: " << e.what() << std::endl;
+        cerr << "❌ Error de sistema: " << e.what() << endl;
     } catch (const std::exception& e) {
-        std::cerr << "❌ Excepción: " << e.what() << std::endl;
+        cerr << "❌ Excepción: " << e.what() << endl;
     }
 
     // Marcar usuario como desconectado
@@ -600,7 +618,7 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
         std::lock_guard<std::mutex> lock(clients_mutex);
         if (clients.find(username) != clients.end()) {
             clients[username].status = 0;
-            std::cout << "❌ Usuario desconectado: " << username << "\n";
+            cout << "👋 Usuario desconectado: " << username << "\n";
         }
     }
 
