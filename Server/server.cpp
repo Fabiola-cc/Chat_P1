@@ -447,6 +447,7 @@ string get_chat_id(const string& user1, const string& user2) {
         case 1:  // Solicitud de lista de usuarios
             {
                 cout << "📜 [" << std::this_thread::get_id() << "] Solicitud de lista de usuarios de: " << sender << endl;
+
                 lock_guard<mutex> lock(clients_mutex);
                 if (clients.find(sender) != clients.end() && clients[sender].status == 1) {
                     send_users_list(*clients[sender].ws);
@@ -454,6 +455,7 @@ string get_chat_id(const string& user1, const string& user2) {
                     cout << "📜🔴 [" << std::this_thread::get_id() << "] No se pudo enviar la lista de usuarios (usuario no encontrado o no disponible)." << endl;
                 }
             }
+            cout << "🔓 Mutex liberado" << endl;
             break;
         case 2:  // Solicitud de información de usuario
             cout << "ℹ️ [" << std::this_thread::get_id() << "] Solicitud de info de usuario de: " << sender << endl;
@@ -477,6 +479,7 @@ string get_chat_id(const string& user1, const string& user2) {
                     cout << "🕘🔴 [" << std::this_thread::get_id() << "] No se pudo recuperar historial de chat (usuario no encontrado o no disponible)." << endl;
                 }
             }
+            cout << "🔓 Mutex liberado" << endl;
             break;
         default:
             cerr << "⚠️ [" << std::this_thread::get_id() << "] Mensaje no reconocido: " << (int)messageType << endl;
@@ -495,22 +498,28 @@ string get_chat_id(const string& user1, const string& user2) {
  * @return true si los encabezados son válidos, false en caso contrario
  */
 bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, tcp::socket& socket) {
-    // Verificar encabezados WebSocket
+    // Verificar encabezados WebSocket - comparación exacta según el protocolo
     auto connection = req[http::field::connection];
     auto upgrade = req[http::field::upgrade];
     auto key = req["Sec-WebSocket-Key"];
     auto version = req["Sec-WebSocket-Version"];
 
-    if (connection != "Upgrade" || upgrade != "websocket" || key.empty() || version != "13") {
-        // Si los encabezados son incorrectos, enviar una respuesta de error
-        http::response<http::string_body> res{http::status::bad_request, req.version()};
-        res.body() = "Encabezados WebSocket incorrectos.";
-        http::write(socket, res);
-        cout << "Encabezados WebSocket incorrectos. " << endl;
-        return false; // Indica que la verificación falló
+    if (boost::beast::iequals(connection, "Upgrade") && 
+        boost::beast::iequals(upgrade, "websocket") && 
+        !key.empty() && 
+        version == "13") {
+        return true; // Encabezados correctos
     }
-
-    return true; // Indica que la verificación fue exitosa
+    
+    // Si los encabezados son incorrectos, enviar una respuesta de error
+    http::response<http::string_body> res{http::status::bad_request, req.version()};
+    res.set(http::field::server, "WebSocketServer");
+    res.set(http::field::content_type, "text/plain");
+    res.body() = "Encabezados WebSocket incorrectos.";
+    res.prepare_payload();
+    http::write(socket, res);
+    cout << "❌ Encabezados WebSocket incorrectos." << endl;
+    return false;
 }
 
 /**
@@ -608,17 +617,39 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
             }
         }
     } catch (const boost::system::system_error& e) {
-        cerr << "❌ Error de sistema: " << e.what() << endl;
+        if (e.code() == boost::beast::websocket::error::closed) {
+            cout << "👋 Conexión cerrada limpiamente por " << username << endl;
+        } else {
+            cerr << "❌ Error de sistema: " << e.what() << endl;
+        }
     } catch (const std::exception& e) {
         cerr << "❌ Excepción: " << e.what() << endl;
     }
 
-    // Marcar usuario como desconectado
+    // Marcar usuario como desconectado y notificar a los demás
     {
         std::lock_guard<std::mutex> lock(clients_mutex);
         if (clients.find(username) != clients.end()) {
-            clients[username].status = 0;
-            cout << "👋 Usuario desconectado: " << username << "\n";
+            clients[username].status = 0;  // Estado: Desconectado
+            
+            // Notificar a todos los usuarios del cambio de estado
+            std::vector<unsigned char> stateChangeMsg;
+            stateChangeMsg.push_back(54);  // Tipo 54: Cambio de estado
+            stateChangeMsg.push_back(username.size());
+            stateChangeMsg.insert(stateChangeMsg.end(), username.begin(), username.end());
+            stateChangeMsg.push_back(0);  // Estado: Desconectado
+            
+            for (auto& [user, client] : clients) {
+                if (user != username && client.ws && client.ws->is_open()) {
+                    try {
+                        client.ws->write(net::buffer(stateChangeMsg));
+                    } catch (const std::exception& e) {
+                        cerr << "⚠️ Error al notificar desconexión a " << user << ": " << e.what() << endl;
+                    }
+                }
+            }
+            
+            cout << "👋 Usuario desconectado: " << username << endl;
         }
     }
 
