@@ -311,7 +311,6 @@ void MessageHandler::showChatMessages(const QString& user2) {
         for (const auto& pair : it->second) {
             const auto& sender = pair.first;
             const auto& content = pair.second;
-
             string displaySender = actualUser.toStdString() == sender? "Tú" : sender;
             targetChatArea->append(QString::fromStdString(displaySender) + ": " + QString::fromStdString(content));
         }
@@ -428,8 +427,10 @@ void MessageHandler::receiveMessage(const QString& message) {
         notificationLabel->show();
         notificationTimer->start(5000);
         userList->addItem(username);  // Añadir a la lista de usuarios
+        userStates[username.toStdString()] = get_status_string(1); // Añadir su estado actual
     }
     else if (messageType == 54) {  // Cambio de estado de usuario
+        
         quint8 usernameLen = static_cast<quint8>(data[1]);
         QString username = QString::fromUtf8(data.mid(2, usernameLen));
         quint8 newStatus = static_cast<quint8>(data[2 + usernameLen]);
@@ -438,10 +439,12 @@ void MessageHandler::receiveMessage(const QString& message) {
         notificationLabel->show();
         notificationTimer->start(5000);
         
+        string last_status = userStates[username.toStdString()];
         userStates[username.toStdString()] = get_status_string(newStatus);
 
         if (actualUser != username) return; // Solo actúa si el usuario actual es el afectado
-        if (newStatus == 1) {  // Recuperar los mensajes si se cambia a activo
+        
+        if (last_status == "Ocupado" && newStatus == 1) {  // Recuperar los mensajes si se cambia a activo
             requestChatHistory("~");
             requestChatHistory(userList->currentText());
         }
@@ -490,6 +493,8 @@ void MessageHandler::receiveMessage(const QString& message) {
         
         QString requestedHistory = pendingHistoryRequests.front();
         pendingHistoryRequests.pop();
+        
+        localChatHistory.clear();  // Eliminar mensajes previos del historial
         for (quint8 i = 0; i < numMessages; i++) {
 
             // Extraer remitente
@@ -509,7 +514,6 @@ void MessageHandler::receiveMessage(const QString& message) {
 
             // Verificar si el mensaje ya está en el historial local
             auto& chatHistory = localChatHistory[chat_id_std];
-            chatHistory.clear();  // Eliminar mensajes previos del historial
             // Agregar mensaje al historial local
             chatHistory.emplace_back(username.toStdString(), content.toStdString());
         }

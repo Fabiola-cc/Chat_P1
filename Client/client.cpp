@@ -215,7 +215,6 @@ public slots:
                 QString url = QString("ws://%1:%2?name=%3").arg(host, port, username);
                 statusLabel->setText("Conectando a " + url + "...");
         
-                connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);
                 connect(&socket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
                         this, &ChatClient::onSocketError);
                 
