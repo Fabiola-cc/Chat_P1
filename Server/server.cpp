@@ -107,23 +107,25 @@ string get_chat_id(const string& user1, const string& user2) {
  * 
  * @param ws Socket WebSocket del cliente al que enviar la información
  */
-void send_users_list(websocket::stream<tcp::socket>& ws) {
+ void send_users_list(websocket::stream<tcp::socket>& ws) {
     lock_guard<mutex> lock(clients_mutex);
 
-    vector<uint8_t> response;
-    response.push_back(51);                  // Código 51: Lista de usuarios
-    response.push_back(clients.size());      // Número de usuarios
+    vector<unsigned char> response;
+    response.push_back(static_cast<unsigned char>(51));                  // Código 51: Lista de usuarios
+    response.push_back(static_cast<unsigned char>(clients.size()));      // Número de usuarios
 
     // Agregar información de cada usuario
     for (const auto& [user, client] : clients) {
-        response.push_back(user.size());                             // Longitud del nombre
+        response.push_back(static_cast<unsigned char>(user.size()));                             // Longitud del nombre
         response.insert(response.end(), user.begin(), user.end());   // Nombre de usuario
-        response.push_back(client.status);                           // Estado
+        response.push_back(static_cast<unsigned char>(client.status));                           // Estado
     }
 
     // Enviar el buffer completo
     ws.write(net::buffer(response));
 }
+
+
 
 /**
  * Procesa la solicitud de cambio de estado de un usuario.
@@ -132,8 +134,8 @@ void send_users_list(websocket::stream<tcp::socket>& ws) {
  * 
  * @param data Buffer con el mensaje recibido
  */
-void change_state(const std::vector<uint8_t>& data) {
-    std::vector<uint8_t> message;
+ void change_state(const std::vector<unsigned char>& data) {
+    std::vector<unsigned char> message;
 
     // Validar longitud mínima del mensaje
     if (data.size() < 3) {
@@ -141,7 +143,7 @@ void change_state(const std::vector<uint8_t>& data) {
         return;
     }
 
-    uint8_t username_len = data[1];
+    unsigned char username_len = data[1];
 
     // Validar que el mensaje contiene el nombre completo
     if (username_len + 2 > data.size()) {
@@ -153,7 +155,7 @@ void change_state(const std::vector<uint8_t>& data) {
     std::string received_username(reinterpret_cast<const char*>(&data[2]), username_len);
 
     // El último byte es el nuevo estado
-    uint8_t new_status = data[2 + username_len];
+    unsigned char new_status = data[2 + username_len];
     if (!(new_status >= 0 && new_status <= 3)) {
         message.push_back(50);                  // Código 50: Error
         message.push_back(2);                   // Estado inválido
@@ -171,7 +173,7 @@ void change_state(const std::vector<uint8_t>& data) {
 
         // Construir el mensaje para el cambio de estado
         message.push_back(54);  // Tipo de mensaje 54: Notificación de cambio de estado
-        message.push_back(static_cast<uint8_t>(received_username.size()));  // Longitud del nombre de usuario
+        message.push_back(static_cast<unsigned char>(received_username.size()));  // Longitud del nombre de usuario
         message.insert(message.end(), received_username.begin(), received_username.end());  // Nombre de usuario
         message.push_back(new_status);  // Nuevo estado
 
@@ -186,6 +188,7 @@ void change_state(const std::vector<uint8_t>& data) {
     }
 }
 
+
 /**
  * Envía el historial de chat al cliente solicitante.
  * Formato solicitud: [5, longitud_nombre_chat, nombre_chat]
@@ -195,11 +198,11 @@ void change_state(const std::vector<uint8_t>& data) {
  * @param data Buffer con el mensaje recibido
  * @param ws Socket WebSocket del cliente
  */
-void get_chat_history(const string& requester, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {
+ void get_chat_history(const string& requester, const vector<unsigned char>& data, websocket::stream<tcp::socket>& ws) {
     // Validar longitud mínima del mensaje
     if (data.size() < 2) return;
 
-    uint8_t chatLen = data[1];
+    unsigned char chatLen = static_cast<unsigned char>(data[1]);
     if (data.size() < 2 + chatLen) return;
 
     // Extraer nombre del chat solicitado
@@ -208,23 +211,22 @@ void get_chat_history(const string& requester, const vector<uint8_t>& data, webs
     // Generar la clave del chat
     string chat_id = chatName != "~" ? get_chat_id(requester, chatName) : chatName;
 
-
     // Construir respuesta
-    vector<uint8_t> response;
-    response.push_back(56);  // Código 56: Historial de chat
+    vector<unsigned char> response;
+    response.push_back(static_cast<unsigned char>(56));  // Código 56: Historial de chat
 
     {
         lock_guard<mutex> lock(history_mutex);
 
-        uint8_t numMessages = chatHistory[chat_id].size();
+        unsigned char numMessages = static_cast<unsigned char>(chatHistory[chat_id].size());
         response.push_back(numMessages);  // Número de mensajes
 
         // Agregar cada mensaje del historial
         for (const auto& [sender, msg] : chatHistory[chat_id]) {
-            response.push_back(sender.size());                           // Longitud del emisor
-            response.insert(response.end(), sender.begin(), sender.end()); // Nombre del emisor
-            response.push_back(msg.size());                               // Longitud del mensaje
-            response.insert(response.end(), msg.begin(), msg.end());       // Contenido del mensaje
+            response.push_back(static_cast<unsigned char>(sender.size()));  // Longitud del emisor
+            response.insert(response.end(), sender.begin(), sender.end());  // Nombre del emisor
+            response.push_back(static_cast<unsigned char>(msg.size()));     // Longitud del mensaje
+            response.insert(response.end(), msg.begin(), msg.end());        // Contenido del mensaje
         }
     }
 
@@ -240,24 +242,24 @@ void get_chat_history(const string& requester, const vector<uint8_t>& data, webs
  * @param sender Nombre del usuario que envía el mensaje
  * @param data Buffer con el mensaje recibido
  */
-void process_chat_message(const string& sender, const vector<uint8_t>& data) {
+ void process_chat_message(const string& sender, const vector<unsigned char>& data) {
     // Validar longitud mínima del mensaje
     if (data.size() < 3) return;
 
-    uint8_t usernameLen = data[1];
+    unsigned char usernameLen = static_cast<unsigned char>(data[1]);
     if (data.size() < 2 + usernameLen + 1) return;
 
     // Extraer destinatario
     string recipient(data.begin() + 2, data.begin() + 2 + usernameLen);
     
-    uint8_t messageLen = data[2 + usernameLen];
+    unsigned char messageLen = static_cast<unsigned char>(data[2 + usernameLen]);
     if (data.size() < 3 + usernameLen + messageLen) return;
 
     // Extraer contenido del mensaje
     if (messageLen == 0) {
-        vector<uint8_t> response;
+        vector<unsigned char> response;
         response.push_back(50); // ERROR
-        response.push_back(3); // Mensaje vacío
+        response.push_back(3);  // Mensaje vacío
     }
     
     string message(data.begin() + 3 + usernameLen, data.begin() + 3 + usernameLen + messageLen);
@@ -267,7 +269,7 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data) {
     // Guardar en historial
     {
         lock_guard<mutex> lock(history_mutex);
-        //Usa el id del chat, solamente el chat general usa su nombre como id
+        // Usa el id del chat, solamente el chat general usa su nombre como id
         string chat_id = recipient != "~" ? get_chat_id(sender, recipient) : recipient;
         chatHistory[chat_id].emplace_back(sender, message);
     }    
@@ -277,13 +279,13 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data) {
     if (recipient == "~"){
         New_sender = recipient;
         message = sender + ": " + message;
-        messageLen = message.size();
+        messageLen = static_cast<unsigned char>(message.size());
     }
 
     // Preparar mensaje para reenvío
-    vector<uint8_t> response;
-    response.push_back(55);  // Código 55: Mensaje de chat
-    response.push_back(New_sender.size());
+    vector<unsigned char> response;
+    response.push_back(static_cast<unsigned char>(55));  // Código 55: Mensaje de chat
+    response.push_back(static_cast<unsigned char>(New_sender.size()));
     response.insert(response.end(), New_sender.begin(), New_sender.end());
     response.push_back(messageLen);
     response.insert(response.end(), message.begin(), message.end());
@@ -307,18 +309,18 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data) {
         if (clients.find(recipient) != clients.end() && clients[recipient].status != 0) {
             clients[recipient].ws->write(net::buffer(response));
         } else {
-            vector<uint8_t> error;
+            vector<unsigned char> error;
             if (clients.find(recipient) == clients.end())
             {
                 error.push_back(50); // ERROR
-                error.push_back(1); // usuario inexistente
+                error.push_back(1);  // usuario inexistente
                 clients[sender].ws->write(net::buffer(error));
             }
             
             int actualStatus = clients[recipient].status;
             if (actualStatus == 0) {
                 error.push_back(50); // ERROR
-                error.push_back(4); // usuario con estatus desconectado
+                error.push_back(4);  // usuario con estatus desconectado
                 clients[sender].ws->write(net::buffer(error));
             }
             
@@ -326,6 +328,7 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data) {
         }
     }
 }
+
 
 /**
  * Envía información sobre un usuario específico al solicitante.
@@ -335,14 +338,14 @@ void process_chat_message(const string& sender, const vector<uint8_t>& data) {
  * @param requester Nombre del usuario que solicita la información
  * @param data Buffer con el mensaje recibido
  */
-void send_info(const string& requester, const vector<uint8_t>& data) {
+ void send_info(const string& requester, const vector<unsigned char>& data) {
     // Validación de datos entrantes
     if (data.size() < 2) {
         cerr << "❌ Error: Datos insuficientes para obtener información de usuario." << endl;
         return;
     }
 
-    uint8_t usernameLen = data[1];
+    unsigned char usernameLen = static_cast<unsigned char>(data[1]);
     if (data.size() < 2 + usernameLen) {
         cerr << "❌ Error: Longitud del nombre de usuario incorrecta." << endl;
         return;
@@ -353,8 +356,8 @@ void send_info(const string& requester, const vector<uint8_t>& data) {
     cout << "🔍 " << requester << " solicita información de: " << targetUsername << endl;
 
     // Creación del paquete de respuesta
-    vector<uint8_t> response;
-    response.push_back(52);  // Tipo 52: Información de usuario
+    vector<unsigned char> response;
+    response.push_back(static_cast<unsigned char>(52));  // Tipo 52: Información de usuario
 
     // Búsqueda de información del usuario
     lock_guard<mutex> lock(clients_mutex);
@@ -362,18 +365,18 @@ void send_info(const string& requester, const vector<uint8_t>& data) {
     
     if (it != clients.end()) {
         // Usuario encontrado - incluir información
-        response.push_back(1);  // Indicador de éxito
+        response.push_back(static_cast<unsigned char>(1));  // Indicador de éxito
         response.push_back(usernameLen);
         response.insert(response.end(), targetUsername.begin(), targetUsername.end());
         response.push_back(it->second.status);
         
         cout << "✅ Información de usuario " << targetUsername << " enviada a " << requester << endl;
     } else {
-        response.push_back(50);                  // Código 50: Error
-        response.push_back(1);                   // Usuario no existente
+        response.push_back(static_cast<unsigned char>(50));  // Código 50: Error
+        response.push_back(static_cast<unsigned char>(1));   // Usuario no existente
 
         // Usuario no encontrado
-        response.push_back(0);  // Indicador de fallo
+        response.push_back(static_cast<unsigned char>(0));   // Indicador de fallo
         cout << "⚠️ Usuario " << targetUsername << " no encontrado" << endl;
     }
 
@@ -384,6 +387,7 @@ void send_info(const string& requester, const vector<uint8_t>& data) {
     }
 }
 
+
 /**
  * Notifica a todos los usuarios conectados que hay un nuevo usuario en línea.
  * Formato mensaje: [53, longitud_nombre, nombre, estado]
@@ -391,15 +395,15 @@ void send_info(const string& requester, const vector<uint8_t>& data) {
  * @param username Nombre del nuevo usuario
  */
  void broadcast_new_user(const std::string& username) {
-    std::vector<uint8_t> message;
+    std::vector<unsigned char> message;
 
-    message.push_back(53);  // Tipo 53: Nuevo usuario
-    message.push_back(static_cast<uint8_t>(username.size()));  // Longitud del nombre
+    message.push_back(static_cast<unsigned char>(53));  // Tipo 53: Nuevo usuario
+    message.push_back(static_cast<unsigned char>(username.size()));  // Longitud del nombre
 
     // Agregar el nombre de usuario
     message.insert(message.end(), username.begin(), username.end());
 
-    message.push_back(1);  // Estado inicial: Activo
+    message.push_back(static_cast<unsigned char>(1));  // Estado inicial: Activo
 
     // Enviar a todos los usuarios activos
     std::lock_guard<std::mutex> lock(clients_mutex);
@@ -426,10 +430,10 @@ void send_info(const string& requester, const vector<uint8_t>& data) {
  * @param sender Nombre del usuario que envía el mensaje
  * @param data Buffer con el mensaje recibido
  */
-void handle_message(const string& sender, const vector<uint8_t>& data) {
+ void handle_message(const string& sender, const vector<unsigned char>& data) {
     if (data.empty()) return;
 
-    uint8_t messageType = data[0];
+    unsigned char messageType = data[0];
 
     switch (messageType) {
         case 1:  // Solicitud de lista de usuarios
@@ -462,6 +466,7 @@ void handle_message(const string& sender, const vector<uint8_t>& data) {
             break;
     }
 }
+
 
 
 /**
@@ -577,8 +582,8 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
 
             // Convertir los datos recibidos a un vector de bytes
             auto data = buffer.data();
-            std::vector<uint8_t> message_data(boost::asio::buffer_cast<const uint8_t*>(data),
-                                              boost::asio::buffer_cast<const uint8_t*>(data) + boost::asio::buffer_size(data));
+            std::vector<unsigned char> message_data(boost::asio::buffer_cast<const unsigned char*>(data),
+                                                    boost::asio::buffer_cast<const unsigned char*>(data) + boost::asio::buffer_size(data));
 
             if (!message_data.empty()) {
                 handle_message(username, message_data);  // Procesar el mensaje
