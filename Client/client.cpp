@@ -7,6 +7,7 @@
 #include <QLineEdit>       // Para campos de entrada de texto
 #include <QPushButton>     // Para botones
 #include <QTextEdit>       // Para áreas de texto multilinea
+#include <QNetworkInterface>
 #include <iostream>
 #include <QComboBox>       // Para menús desplegables
 #include <QNetworkReply>   // Para manejar respuestas de red
@@ -17,6 +18,8 @@
 
 using namespace std;
 
+
+
 /**
  * @class ChatClient
  * @brief Clase principal del cliente de chat
@@ -26,6 +29,8 @@ using namespace std;
  */
 class ChatClient : public QWidget {
     Q_OBJECT
+private:
+    QString localIP;
 
 public:
     /**
@@ -170,6 +175,10 @@ public:
         connect(messageInput, &QLineEdit::textChanged, this, &ChatClient::resetInactivityTimer);
         connect(userList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ChatClient::resetInactivityTimer);
         connect(statusDropdown, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ChatClient::resetInactivityTimer);
+
+        connect(generalMessageInput, &QLineEdit::textChanged, this, &ChatClient::setActivity);
+        connect(messageInput, &QLineEdit::textChanged, this, &ChatClient::setActivity);
+        connect(userList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ChatClient::setActivity);
     }
 
 public slots:
@@ -210,6 +219,7 @@ public slots:
                 connect(&socket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
                         this, &ChatClient::onSocketError);
                 
+                localIP = getLocalIPAddress(); 
                 socket.open(QUrl(url));
                 
                 qDebug() << "Conectando a la URL: " << url;
@@ -315,7 +325,7 @@ public slots:
      */
     void onConnected() {
         
-        statusLabel->setText("Bienvenid@ " + usernameInput->text());
+        statusLabel->setText("Bienvenid@ " + usernameInput->text() + " - IP: " + localIP);
         statusDropdown->setEnabled(true);  // Habilitar selección de estado
         
         // Ocultar controles de conexión
@@ -343,6 +353,7 @@ public slots:
         optionsButton->show();
         ayudaButton->show();
         statusDropdown->show();
+        errorLabel->hide();
 
         // Registrar nombre de usuario
         messageHandler->setActualUser(usernameInput->text());
@@ -374,9 +385,14 @@ public slots:
         }
     }
 
+    void setActivity() {
+        statusDropdown->setCurrentIndex(0);
+    }
+
     void resetInactivityTimer() {
         inactivityTimer->start(40000); 
     }
+
     
     void setInactiveState() {
         if (messageHandler && !usernameInput->text().isEmpty()) {
@@ -384,7 +400,11 @@ public slots:
                 notificationLabel->setText("Sigues Inactivo");
                 notificationLabel->show();
                 notificationTimer->start(10000);
-            } else {
+            } else if (statusDropdown->currentIndex() == 1){
+                notificationLabel->setText("Parece que estas muy Ocupado");
+                notificationLabel->show();
+                notificationTimer->start(10000);
+            }else {
                 statusDropdown->setCurrentIndex(2); // Índice 2 = "Inactivo" 
             }
         }
@@ -433,6 +453,18 @@ public slots:
         // Mostrar diálogo como no-modal (permite interactuar con la ventana principal)
         dialog1->show();
     }
+
+    QString getLocalIPAddress() {
+        for (const QHostAddress &address : QNetworkInterface::allAddresses()) {
+            if (address.protocol() == QAbstractSocket::IPv4Protocol && 
+                address != QHostAddress::LocalHost && 
+                !address.toString().startsWith("169.")) { 
+                return address.toString();
+            }
+        }
+        return "127.0.0.1";  // En caso de fallo, devolver localhost
+    }
+
 private:
     QWebSocket socket;              // Socket para la comunicación WebSocket
     QNetworkAccessManager http;     // Comunicacion http
