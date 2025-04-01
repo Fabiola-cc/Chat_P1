@@ -32,6 +32,8 @@ public:
     const std::unordered_map<std::string, std::string>& getUserStates() const { 
         return userStates; 
     }
+    void requestUsersList();
+    void setUserListReceivedCallback(std::function<void(const std::unordered_map<std::string, std::string>&)> callback);
 
 
 private slots:
@@ -69,6 +71,7 @@ private:
     //Otras variables
     QString actualUser;
     std::queue<QString> pendingHistoryRequests;
+    std::function<void(const std::unordered_map<std::string, std::string>&)> m_userListReceivedCallback;
 };
 
 #endif // MESSAGEHANDLER_H

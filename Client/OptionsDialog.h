@@ -23,6 +23,8 @@ public:
     void addUserInfo(const QString &username, int status);
     void setRequestInfoFunction(std::function<void(const QString&)> func);
     void setUserStatesFunction(QComboBox* userList, const std::unordered_map<std::string, std::string>& userStates);
+    void updateAllUsersTextArea(const std::unordered_map<std::string, std::string> &userStates);
+    void setRequestAllUsersFunction(std::function<void()> func);
 
 private slots:
     // Slot para el botón aceptar
@@ -44,6 +46,7 @@ private:
     
     // Referencia al mapa de estados de usuarios
     std::unordered_map<std::string, std::string> m_userStates;
+    std::function<void()> m_requestAllUsersFunc;
 
     // Layout setup method
     void setupUI();

@@ -5,6 +5,8 @@
 #include <QLabel>
 #include <QDebug>
 #include <iostream>
+#include <QTimer>
+
 
 OptionsDialog::OptionsDialog(QWidget *parent)
     : QDialog(parent), m_userStates()
@@ -161,16 +163,49 @@ void OptionsDialog::setUserStatesFunction(QComboBox* userList, const std::unorde
     connect(showAllUsersButton, &QPushButton::clicked, this, &OptionsDialog::onShowAllUsersClicked);
 }
 
-void OptionsDialog::onShowAllUsersClicked() {
-    // Limpiar el área de texto
+void OptionsDialog::updateAllUsersTextArea(const std::unordered_map<std::string, std::string>& userStates) {
     allUsersTextArea->clear();
     
-    // Mostrar los usuarios y sus estados
-    allUsersTextArea->append("Lista de Usuarios y Estados:\n");
+    // Check if we received any users
+    if (userStates.empty()) {
+        allUsersTextArea->append("No hay usuarios conectados actualmente.");
+        return;
+    }
     
-    for (const auto& [username, state] : m_userStates) {
-        QString user = QString::fromStdString(username);
-        QString status = QString::fromStdString(state);
-        allUsersTextArea->append(user + ": " + status);
+    // Display the users and their status
+    for (const auto& [username, status] : userStates) {
+        allUsersTextArea->append(QString::fromStdString(username) + ": " + 
+                                QString::fromStdString(status));
+    }
+}
+
+void OptionsDialog::setRequestAllUsersFunction(std::function<void()> func) {
+    m_requestAllUsersFunc = func;
+}
+
+void OptionsDialog::onShowAllUsersClicked() {
+    allUsersTextArea->clear();
+    allUsersTextArea->append("Solicitando lista de usuarios del servidor...");
+    
+    if (m_requestAllUsersFunc) {
+        m_requestAllUsersFunc();
+        
+        // Add timeout to show error if no response within 5 seconds
+        QTimer* responseTimer = new QTimer(this);
+        responseTimer->setSingleShot(true);
+        connect(responseTimer, &QTimer::timeout, this, [this, responseTimer]() {
+            if (allUsersTextArea->toPlainText().startsWith("Solicitando lista")) {
+                allUsersTextArea->clear();
+                allUsersTextArea->append("El servidor no respondió a tiempo. Puede haber un problema de conexión.");
+                
+                // Try to diagnose the issue
+                allUsersTextArea->append("\nPosibles causas:");
+                allUsersTextArea->append("- El servidor está sobrecargado");
+                allUsersTextArea->append("- Hay un problema de red");
+                allUsersTextArea->append("- El WebSocket está desconectado");
+            }
+            responseTimer->deleteLater();
+        });
+        responseTimer->start(5000);  // 5-second timeout
     }
 }

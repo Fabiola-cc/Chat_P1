@@ -115,6 +115,23 @@ void MessageHandler::requestUserInfo(const QString& username) {
     socket.sendBinaryMessage(request);  // Enviar solicitud al servidor
 }
 
+void MessageHandler::setUserListReceivedCallback(std::function<void(const std::unordered_map<std::string, std::string>&)> callback) {
+    m_userListReceivedCallback = callback;
+}
+
+void MessageHandler::requestUsersList() {
+    if (socket.state() != QAbstractSocket::ConnectedState) {
+        qDebug() << "⚠️ Cannot request user list: WebSocket not connected";
+        return;
+    }
+    
+    // Crear mensaje binario para solicitar la lista de usuarios
+    // Formato: [Tipo=1]
+    QByteArray request;
+    request.append(static_cast<char>(1));  // Tipo 1: Obtener lista de usuarios
+    
+    socket.sendBinaryMessage(request);  // Enviar solicitud al servidor
+}
 /**
  * @brief Solicita el historial de conversación de un chat específico
  * 
@@ -381,6 +398,10 @@ void MessageHandler::receiveMessage(const QString& message) {
                     stateList->setCurrentIndex(stateIndex);
                 }
             }
+        }
+        
+        if (m_userListReceivedCallback) {
+            m_userListReceivedCallback(userStates);
         }
     } 
     else if (messageType == 52) {  // Información de usuario

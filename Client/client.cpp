@@ -422,6 +422,7 @@ public slots:
         // Pasar la lista de usuarios al diálogo
         dialog->setUserList(userList);
         dialog->setUserStatesFunction(userList, messageHandler->getUserStates());
+        
         // Configurar para auto-destrucción al cerrar
         dialog->setAttribute(Qt::WA_DeleteOnClose);
         
@@ -430,17 +431,28 @@ public slots:
             messageHandler->requestUserInfo(username);
         });
         
+        // Configurar función para solicitar lista de todos los usuarios
+        dialog->setRequestAllUsersFunction([this, dialog]() {
+            messageHandler->requestUsersList();
+        });
+        
         // Configurar callback para recibir información de usuarios
         messageHandler->setUserInfoCallback([dialog](const QString& username, int status) {
             dialog->addUserInfo(username, status);
         });
         
-        // Limpiar callback cuando se cierre el diálogo
-        connect(dialog, &QDialog::finished, this, [this]() {
-            messageHandler->setUserInfoCallback(nullptr);
+        // Configurar callback para recibir la lista de usuarios
+        messageHandler->setUserListReceivedCallback([dialog](const std::unordered_map<std::string, std::string>& userStates) {
+            dialog->updateAllUsersTextArea(userStates);
         });
         
-        // Mostrar diálogo como no-modal (permite interactuar con la ventana principal)
+        // Limpiar callbacks cuando se cierre el diálogo
+        connect(dialog, &QDialog::finished, this, [this]() {
+            messageHandler->setUserInfoCallback(nullptr);
+            messageHandler->setUserListReceivedCallback(nullptr);
+        });
+        
+        // Mostrar diálogo como no-modal
         dialog->show();
     }
 
