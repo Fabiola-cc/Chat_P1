@@ -33,7 +33,7 @@ MessageHandler::MessageHandler(QWebSocket& socket,
     messageInput(input), sendButton(button), chatArea(chatArea), 
     userList(userList), stateList(stateList), usernameInput(usernameInput), notificationLabel(notificationLabel), notificationTimer(notificationTimer),
     m_userInfoCallback(nullptr) { 
-    
+
     actualUser = ""; // Espacio para registrar el nombre del usuario actual
     requestedHistory = "~"; // Bandera de quién está solicitando el historial de chat
 
@@ -209,7 +209,7 @@ void MessageHandler::sendMessage() {
 void MessageHandler::sendGeneralMessage() {
     // Verificar que hay texto para enviar
     QString message = generalMessageInput->text().trimmed();
-    
+
     if (message.isEmpty()) {
         generalChatArea->append("!! Mensaje vacío");
         return;
@@ -225,7 +225,7 @@ void MessageHandler::sendGeneralMessage() {
     // Construir y enviar el mensaje
     QByteArray formattedMessage = buildMessage(4, recipient, message);  // Tipo 4: mensaje de chat
     socket.sendBinaryMessage(formattedMessage);
-    
+
     // Limpiar el campo de entrada después de enviar
     generalMessageInput->clear();
 }
@@ -255,7 +255,7 @@ void MessageHandler::storeMessage(const QString& sender, const QString& message)
     // Obtener el chat_id en formato QString o mantenerlo si es "~"
     QString chat_id_qt = sender != "~" ? get_chat_id(sender) : sender;
     std::string chat_id_std = chat_id_qt.toStdString();
-    
+
     // Verificar si el mensaje ya está en el historial local
     auto& chatHistory = localChatHistory[chat_id_std];
     if (std::find(chatHistory.begin(), chatHistory.end(),
@@ -274,7 +274,7 @@ void MessageHandler::showChatMessages(const QString& user2) {
     if (stateList->currentText() == "Ocupado") return; // No mostrar a un usuario ocupado
     // Determinar si es chat general o personal
     bool isGeneralChat = (user2 == "~");
-    
+
     // Seleccionar el área de chat adecuada
     QTextEdit* targetChatArea = isGeneralChat ? generalChatArea : chatArea;
 
@@ -330,8 +330,8 @@ QByteArray MessageHandler::buildMessage(quint8 type, const QString& param1, cons
  * relevante para actualizar la interfaz de usuario.
  */
 void MessageHandler::receiveMessage(const QString& message) {
-    QByteArray data = message.toLocal8Bit();
-    if (message.isEmpty()) return;  // Validar entrada
+    QByteArray data = message.toUtf8();
+    if (data.isEmpty()) return;  // Validar entrada
 
     quint8 messageType = static_cast<quint8>(data[0]);  // Obtener tipo de mensaje
 
@@ -382,7 +382,7 @@ void MessageHandler::receiveMessage(const QString& message) {
             if (username != actualUser) {
                 userList->addItem(username);  //Añadir a la lista
             } 
-            
+
             // Actualizar estado si es el usuario actual
             if (username == userList->currentText()) {
                 int stateIndex = stateList->findData(status);
@@ -394,18 +394,18 @@ void MessageHandler::receiveMessage(const QString& message) {
     } 
     else if (messageType == 52) {  // Información de usuario
         quint8 success = static_cast<quint8>(data[1]);  // Éxito/fracaso
-        
+
         if (success) {
             // Extraer información del usuario
             quint8 usernameLen = static_cast<quint8>(data[2]);
             QString username = QString::fromUtf8(data.mid(3, usernameLen));
             quint8 status = static_cast<quint8>(data[3 + usernameLen]);
-            
+
             // Llamar al callback si está configurado
             if (m_userInfoCallback) {
                 m_userInfoCallback(username, status);
             }
-            
+
             // Mostrar información en el chat
             generalChatArea->append("Información de usuario: " + username + 
                              " - Estado: " + QString::fromStdString(get_status_string(status)));
@@ -449,7 +449,7 @@ void MessageHandler::receiveMessage(const QString& message) {
         // Extraer remitente
         quint8 usernameLen = static_cast<quint8>(data[1]);
         QString username = QString::fromUtf8(data.mid(2, usernameLen));
-        
+
         // Extraer contenido del mensaje
         quint8 messageLen = static_cast<quint8>(data[2 + usernameLen]);
         QString content = QString::fromUtf8(data.mid(3 + usernameLen, messageLen));
@@ -458,19 +458,19 @@ void MessageHandler::receiveMessage(const QString& message) {
             storeMessage(username, content);
             return;
         }
-    
+
         // Definir nombre de usuario en la UI
         QString displayUsername = (actualUser == username) ? "Tú" : username;
-    
+
         // Si es el chat general, solo mostramos el contenido
         if (displayUsername == "~") {
             generalChatArea->append(content);
             return;
         }
-    
+
         // Determinar el chat en el que estamos
         QString actualChat = userList->currentText();
-    
+
         if (displayUsername == "Tú" || displayUsername == actualChat) {
             chatArea->append(displayUsername + ": " + content);
         } else {
@@ -478,7 +478,7 @@ void MessageHandler::receiveMessage(const QString& message) {
             notificationLabel->show();
             notificationTimer->start(5000);
         }
-        
+
     } 
     else if (messageType == 56) {  // Historial de chat recibido
         quint8 numMessages = static_cast<quint8>(data[1]);  // Número de mensajes
@@ -490,12 +490,12 @@ void MessageHandler::receiveMessage(const QString& message) {
             quint8 usernameLen = static_cast<quint8>(data[pos]);
             QString username = QString::fromUtf8(data.mid(pos + 1, usernameLen));
             pos += 1 + usernameLen;  // Avanzar posición
-    
+
             // Extraer contenido
             quint8 messageLen = static_cast<quint8>(data[pos]);
             QString content = QString::fromUtf8(data.mid(pos + 1, messageLen));
             pos += 1 + messageLen;  // Avanzar posición
-    
+
             // Construir la clave del chat para el historial
             QString chat_id_qt = requestedHistory.toStdString() != "~" ? get_chat_id(requestedHistory) : requestedHistory;;
             // Convertir a string solo para acceder a unordered_map
