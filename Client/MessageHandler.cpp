@@ -35,7 +35,7 @@ MessageHandler::MessageHandler(QWebSocket& socket,
     m_userInfoCallback(nullptr) { 
     
     actualUser = ""; // Espacio para registrar el nombre del usuario actual
-    requestedHistory = "~"; // Bandera de quién está solicitando el historial de chat
+    pendingHistoryRequests; // Bandera de quién está solicitando el historial de chat
 
     // Conectar señales y slots para el chat personal
     connect(sendButton, &QPushButton::clicked, this, &MessageHandler::sendMessage);
@@ -122,7 +122,7 @@ void MessageHandler::requestUserInfo(const QString& username) {
  * @param chatName Nombre del chat (un usuario o "~" para el chat general)
  */
 void MessageHandler::requestChatHistory(const QString& chatName) {
-    requestedHistory = chatName;
+    pendingHistoryRequests.push(chatName);
     if (chatName.isEmpty()) return;  // Validar entrada
 
     // Crear mensaje binario para solicitar historial
@@ -421,17 +421,13 @@ void MessageHandler::receiveMessage(const QString& message) {
                         QString::fromStdString(get_status_string(newStatus)));
         notificationLabel->show();
         notificationTimer->start(5000);
+        
+        userStates[username.toStdString()] = get_status_string(newStatus);
 
         if (actualUser != username) return; // Solo actúa si el usuario actual es el afectado
-        switch (newStatus) { 
-            case 1: // Recuperar los mensajes si se cambia a activo
-                showChatMessages("~");
-                showChatMessages(userList->currentText());
-                break;
-            case 2: // Guardar los mensajes hasta ahora si se cambia a ocupado
-                requestChatHistory("~");
-                requestChatHistory(userList->currentText());
-                break;
+        if (newStatus == 1) {  // Recuperar los mensajes si se cambia a activo
+            requestChatHistory("~");
+            requestChatHistory(userList->currentText());
         }
     }
     else if (messageType == 55) {  // Mensaje normal de chat
@@ -474,6 +470,10 @@ void MessageHandler::receiveMessage(const QString& message) {
         quint8 numMessages = static_cast<quint8>(data[1]);  // Número de mensajes
         int pos = 2;  // Posición para leer datos
 
+        if (pendingHistoryRequests.empty()) return;
+        
+        QString requestedHistory = pendingHistoryRequests.front();
+        pendingHistoryRequests.pop();
         for (quint8 i = 0; i < numMessages; i++) {
 
             // Extraer remitente
@@ -493,12 +493,11 @@ void MessageHandler::receiveMessage(const QString& message) {
 
             // Verificar si el mensaje ya está en el historial local
             auto& chatHistory = localChatHistory[chat_id_std];
-            if (find(chatHistory.begin(), chatHistory.end(),
-                        make_pair(username.toStdString(), content.toStdString())) == chatHistory.end()) {
-                // Agregar mensaje al historial local
-                chatHistory.emplace_back(username.toStdString(), content.toStdString());
-            }            
+            chatHistory.clear();  // Eliminar mensajes previos del historial
+            // Agregar mensaje al historial local
+            chatHistory.emplace_back(username.toStdString(), content.toStdString());
         }
+        
         showChatMessages(requestedHistory);
     }    
     else {

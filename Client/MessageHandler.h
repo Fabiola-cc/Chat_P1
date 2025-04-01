@@ -10,6 +10,7 @@
 #include <QTextEdit>
 #include <QComboBox>
 #include <functional> // Para usar std::function
+#include <queue>
 
 class MessageHandler : public QObject {
     Q_OBJECT
@@ -61,7 +62,7 @@ private:
 
     //Otras variables
     QString actualUser;
-    QString requestedHistory;
+    std::queue<QString> pendingHistoryRequests;
 };
 
 #endif // MESSAGEHANDLER_H

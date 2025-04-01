@@ -310,9 +310,6 @@ public slots:
         
         statusLabel->setText("Bienvenid@ " + usernameInput->text());
         statusDropdown->setEnabled(true);  // Habilitar selección de estado
-
-        // Desconectar la selección de usuarios para no llamar a su historial inmediatamente
-        disconnect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);
         
         // Ocultar controles de conexión
         hostInput->hide();
@@ -343,12 +340,6 @@ public slots:
         messageHandler->setActualUser(usernameInput->text());
 
         inactivityTimer->start(40000);
-
-        // Reconectar cuando todo está listo
-        QTimer::singleShot(500, this, [this]() {
-            // Asegurarse de que no haya conexiones previas antes de conectar de nuevo
-            connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected);
-        });
     }    
 
     /**
