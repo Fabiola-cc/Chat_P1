@@ -7,7 +7,7 @@
 #include <iostream>
 
 OptionsDialog::OptionsDialog(QWidget *parent)
-    : QDialog(parent)
+    : QDialog(parent), m_userStates()
 {
     setWindowTitle("Opciones de Usuario");
     setMinimumSize(400, 300);
@@ -28,6 +28,8 @@ OptionsDialog::OptionsDialog(QWidget *parent)
     // Connect signal and slot para los botones
     connect(exitButton, &QPushButton::clicked, this, &OptionsDialog::close);
     connect(acceptButton, &QPushButton::clicked, this, &OptionsDialog::onAcceptClicked);
+    connect(showAllUsersButton, &QPushButton::clicked, this, &OptionsDialog::onShowAllUsersClicked);
+
 }
 
 OptionsDialog::~OptionsDialog()
@@ -63,8 +65,18 @@ void OptionsDialog::setupUI()
     displayBox1->setMaximumHeight(30);
     displayBox1->setStyleSheet("background-color: #f0f0f0;");  // Fondo gris claro para indicar solo lectura
     mainLayout->addWidget(displayBox1);
-    
+    acceptButton = new QPushButton("Aceptar", this);
+    mainLayout->addWidget(acceptButton);
 
+    showAllUsersButton = new QPushButton("Ver Todos los Usuarios", this);
+    mainLayout->addWidget(showAllUsersButton);
+    QLabel *allUsersLabel = new QLabel("Lista de Todos los Usuarios:", this);
+    mainLayout->addWidget(allUsersLabel);
+    allUsersTextArea = new QTextEdit(this);
+    allUsersTextArea->setReadOnly(true);
+    allUsersTextArea->setMinimumHeight(150);
+    mainLayout->addWidget(allUsersTextArea);
+    
    
     // Espacio en blanco, reducir la altura ya que añadimos cajas de texto
     QLabel *emptyLabel = new QLabel(this);
@@ -74,9 +86,8 @@ void OptionsDialog::setupUI()
     // Botones en la parte inferior
     QHBoxLayout *buttonLayout = new QHBoxLayout();
    
-    acceptButton = new QPushButton("Aceptar", this);
+
     exitButton = new QPushButton("Salir", this);
-    buttonLayout->addWidget(acceptButton);
     buttonLayout->addStretch();
     buttonLayout->addWidget(exitButton);
    
@@ -94,15 +105,6 @@ void OptionsDialog::setUserList(QComboBox* userList)
     // Copiar todos los elementos de la lista original
     for (int i = 0; i < userList->count(); i++) {
         userListView->addItem(userList->itemText(i));
-    }
-    
-    //Simulación de datos 
-    for (int i = 0; i < userListView->count(); i++) {
-        QString username = userListView->itemText(i);
-        if (username != "General") {
-            // Simular datos de usuario
-            addUserInfo(username, 3 );
-        }
     }
 }
 
@@ -140,5 +142,35 @@ void OptionsDialog::onAcceptClicked()
         // La interfaz se actualizará cuando llegue la respuesta
     } else {
         displayBox1->setPlainText("...");
+    }
+}
+
+void OptionsDialog::setUserStatesFunction(QComboBox* userList, const std::unordered_map<std::string, std::string>& userStates) {
+    // Guardar el mapa de estados
+    m_userStates = userStates;
+    
+    // Limpiar la lista actual
+    userListView->clear();
+   
+    // Copiar todos los elementos de la lista original
+    for (int i = 0; i < userList->count(); i++) {
+        userListView->addItem(userList->itemText(i));
+    }
+    
+    // Conectar el botón para mostrar todos los usuarios
+    connect(showAllUsersButton, &QPushButton::clicked, this, &OptionsDialog::onShowAllUsersClicked);
+}
+
+void OptionsDialog::onShowAllUsersClicked() {
+    // Limpiar el área de texto
+    allUsersTextArea->clear();
+    
+    // Mostrar los usuarios y sus estados
+    allUsersTextArea->append("Lista de Usuarios y Estados:\n");
+    
+    for (const auto& [username, state] : m_userStates) {
+        QString user = QString::fromStdString(username);
+        QString status = QString::fromStdString(state);
+        allUsersTextArea->append(user + ": " + status);
     }
 }

@@ -11,6 +11,8 @@
 #include <QComboBox>
 #include <functional> // Para usar std::function
 #include <queue>
+#include <unordered_map>
+
 
 class MessageHandler : public QObject {
     Q_OBJECT
@@ -27,6 +29,10 @@ public:
     void requestUserInfo(const QString& username);
     void setUserInfoCallback(std::function<void(const QString&, int)> callback);
     void setActualUser(const QString& username);
+    const std::unordered_map<std::string, std::string>& getUserStates() const { 
+        return userStates; 
+    }
+
 
 private slots:
     void sendMessage();         // Enviar mensaje en chat personal
@@ -53,7 +59,7 @@ private:
     QLineEdit* usernameInput;
     QLabel* notificationLabel;
     QTimer* notificationTimer;
-
+    std::unordered_map<std::string, std::string> userStates;
     // Creador de mensajes para el server
     QByteArray buildMessage(quint8 type, const QString& param1, const QString& param2 = "");
     

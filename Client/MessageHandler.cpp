@@ -6,7 +6,6 @@
 
 using namespace std;
 unordered_map<string, vector<pair<string, string>>> localChatHistory; // clave: ID del chat
-unordered_map<string, string> userStates;
 
 /**
  * @brief Constructor de la clase MessageHandler
@@ -369,7 +368,7 @@ void MessageHandler::receiveMessage(const QString& message) {
             string user_status = get_status_string(status);
 
             // Guardar en la estructura de datos
-            userStates[username.toStdString()] = user_status;
+            this-> userStates[username.toStdString()] = user_status;
 
             if (username != actualUser) {
                 userList->addItem(username);  //Añadir a la lista
@@ -397,10 +396,6 @@ void MessageHandler::receiveMessage(const QString& message) {
             if (m_userInfoCallback) {
                 m_userInfoCallback(username, status);
             }
-
-            // Mostrar información en el chat
-            generalChatArea->append("Información de usuario: " + username + 
-                             " - Estado: " + QString::fromStdString(get_status_string(status)));
         } else {
             generalChatArea->append("No se encontró información del usuario solicitado");
         }

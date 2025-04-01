@@ -393,7 +393,7 @@ public slots:
         
         // Pasar la lista de usuarios al diálogo
         dialog->setUserList(userList);
-        
+        dialog->setUserStatesFunction(userList, messageHandler->getUserStates());
         // Configurar para auto-destrucción al cerrar
         dialog->setAttribute(Qt::WA_DeleteOnClose);
         
