@@ -196,8 +196,10 @@ void change_state(const std::vector<uint8_t>& data) {
  * @param ws Socket WebSocket del cliente
  */
 void get_chat_history(const string& requester, const vector<uint8_t>& data, websocket::stream<tcp::socket>& ws) {
+    cout<<"STOP 2"<<endl;
     // Validar longitud mínima del mensaje
     if (data.size() < 2) return;
+    cout<<"STOP 3"<<endl;
 
     uint8_t chatLen = data[1];
     if (data.size() < 2 + chatLen) return;
@@ -208,7 +210,7 @@ void get_chat_history(const string& requester, const vector<uint8_t>& data, webs
     // Generar la clave del chat
     string chat_id = chatName != "~" ? get_chat_id(requester, chatName) : chatName;
 
-
+    cout<<requester + " solicitó el historial del chat " + chat_id<<endl;
     // Construir respuesta
     vector<uint8_t> response;
     response.push_back(56);  // Código 56: Historial de chat
@@ -450,9 +452,11 @@ void handle_message(const string& sender, const vector<uint8_t>& data) {
             process_chat_message(sender, data);
             break;
         case 5:  // Solicitud de historial de chat
+            cout<<"Se solicitó el historial"<<endl;
             {
                 lock_guard<mutex> lock(clients_mutex);
                 if (clients.find(sender) != clients.end() && clients[sender].status == 1) {
+                    cout<<"STOP 1"<<endl;
                     get_chat_history(sender, data, *clients[sender].ws);
                 }
             }
