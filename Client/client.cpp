@@ -12,6 +12,8 @@
 #include <QNetworkReply>   // Para manejar respuestas de red
 #include "MessageHandler.h" // Clase personalizada para manejo de mensajes
 #include "OptionsDialog.h"  // Diálogo de opciones personalizado
+#include "Ayuda.h"  // Diálogo de opciones personalizado
+
 
 using namespace std;
 
@@ -57,6 +59,7 @@ public:
         usernameInput = new QLineEdit("Usuario", this);      // Campo para el nombre de usuario
         connectButton = new QPushButton("Conectar", this);   // Botón para iniciar conexión
         optionsButton = new QPushButton("Opciones", this);   // Botón para opciones adicionales
+        ayudaButton = new QPushButton("Ayuda", this);   // Botón para opciones adicionales
 
         // Etiquetas para mostrar estado y errores
         statusLabel = new QLabel("Introduce los datos y presiona conectar.", this);
@@ -130,12 +133,14 @@ public:
         rightLayout->addWidget(sendButton);
 
         // Opcioness, general
-        optionsButton->hide();                      // Oculto hasta que se conecte
+            optionsButton->hide();                      // Oculto hasta que se conecte
+            ayudaButton->hide();                      // Oculto hasta que se conecte
         
         configLayout->addWidget(leftPanel);
         configLayout->addWidget(rightPanel);
         mainLayout ->addWidget(configPanel);
         mainLayout->addWidget(optionsButton);
+        mainLayout->addWidget(ayudaButton);
 
         setLayout(mainLayout);
 
@@ -144,6 +149,7 @@ public:
         connect(&socket, &QWebSocket::connected, this, &ChatClient::onConnected);            // Manejar conexión exitosa
         connect(&socket, &QWebSocket::disconnected, this, &ChatClient::onDisconnected);      // Manejar desconexión
         connect(optionsButton, &QPushButton::clicked, this, &ChatClient::showOptionsDialog); // Mostrar opciones
+        connect(ayudaButton, &QPushButton::clicked, this, &ChatClient::showAyudaDialog); // Mostrar opciones
         connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected); // Manejar cambio de usuario seleccionado
 
         // Crear el manejador de mensajes (clase externa que procesa los mensajes)
@@ -275,6 +281,7 @@ public slots:
         messageInput->hide();
         sendButton->hide();
         optionsButton->hide();
+        ayudaButton->hide();
         generalChatLabel->hide();
         generalChatArea->hide();                    
         generalMessageInput->hide();               
@@ -334,6 +341,7 @@ public slots:
         messageInput->show();
         sendButton->show();
         optionsButton->show();
+        ayudaButton->show();
         statusDropdown->show();
 
         // Registrar nombre de usuario
@@ -416,6 +424,15 @@ public slots:
         dialog->show();
     }
 
+    void showAyudaDialog() {
+        Ayuda *dialog1 = new Ayuda(this);
+        
+        // Configurar para auto-destrucción al cerrar
+        dialog1->setAttribute(Qt::WA_DeleteOnClose);
+        
+        // Mostrar diálogo como no-modal (permite interactuar con la ventana principal)
+        dialog1->show();
+    }
 private:
     QWebSocket socket;              // Socket para la comunicación WebSocket
     QNetworkAccessManager http;     // Comunicacion http
@@ -426,6 +443,7 @@ private:
     QLineEdit *usernameInput;       // Campo para nombre de usuario
     QPushButton *connectButton;     // Botón para conectar
     QPushButton *optionsButton;     // Botón para mostrar opciones
+    QPushButton *ayudaButton;     // Botón para mostrar ayuda
     QLabel *generalChatLabel;       // Etiqueta para reconocer el área de chat general
     QLabel *chatLabel;              // Etiqueta para reconocer el área de chat
     QTextEdit *generalChatArea;            // Área de visualización de mensajes en chat general

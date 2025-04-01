@@ -14,6 +14,7 @@
 #include <iostream>
 #include <QComboBox>
 #include "MessageHandler.h"
+#include "Ayuda.h"
 
 class ChatClient : public QWidget {
     Q_OBJECT
@@ -38,6 +39,8 @@ private:
 private slots:
     void onUserSelected(const QString& selectedUser);
     void showOptionsDialog();
+    void showAyudaDialog();
+
 };
 
 #endif // ChatClient_H
