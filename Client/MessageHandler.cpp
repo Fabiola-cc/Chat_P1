@@ -35,7 +35,7 @@ MessageHandler::MessageHandler(QWebSocket& socket,
     m_userInfoCallback(nullptr) { 
 
     actualUser = ""; // Espacio para registrar el nombre del usuario actual
-    requestedHistory = "~"; // Bandera de quién está solicitando el historial de chat
+    pendingHistoryRequests; // Bandera de quién está solicitando el historial de chat
 
     // Conectar señales y slots para el chat personal
     connect(sendButton, &QPushButton::clicked, this, &MessageHandler::sendMessage);
@@ -122,7 +122,7 @@ void MessageHandler::requestUserInfo(const QString& username) {
  * @param chatName Nombre del chat (un usuario o "~" para el chat general)
  */
 void MessageHandler::requestChatHistory(const QString& chatName) {
-    requestedHistory = chatName;
+    pendingHistoryRequests.push(chatName);
     if (chatName.isEmpty()) return;  // Validar entrada
 
     // Crear mensaje binario para solicitar historial
@@ -193,6 +193,15 @@ void MessageHandler::sendMessage() {
     // Determinar el destinatario
     QString recipient = userList->currentText();
 
+    if (userStates[recipient.toStdString()] == "Desconectado")
+    {
+        chatArea->append("No puedes mandar mensaje, este usuario se desconectó");
+        notificationLabel->setText(recipient + " está desconectado");
+        notificationLabel->show();
+        notificationTimer->start(5000);
+        return;
+    }
+    
     // Construir y enviar el mensaje
     QByteArray formattedMessage = buildMessage(4, recipient, message);  // Tipo 4: mensaje de chat
     socket.sendBinaryMessage(formattedMessage);
@@ -277,7 +286,7 @@ void MessageHandler::showChatMessages(const QString& user2) {
 
     // Seleccionar el área de chat adecuada
     QTextEdit* targetChatArea = isGeneralChat ? generalChatArea : chatArea;
-
+    targetChatArea->clear(); //Limpiar antes de mostrar los mensajes
     string chat_id = isGeneralChat ? user2.toStdString() : get_chat_id(user2).toStdString();
 
     // Verificar si existe historial para el chat dado
@@ -356,28 +365,11 @@ void MessageHandler::receiveMessage(const QString& message) {
             quint8 status = static_cast<quint8>(data[pos]);
             pos += 1;  // Avanzar posición
 
-            // Convert numeric status to string representation
-            QString user_status;
-            switch (status) {
-                case 0:
-                    user_status = "Desconectado";
-                    break;
-                case 1:
-                    user_status = "Activo";
-                    break;
-                case 2:
-                    user_status = "Ocupado";
-                    break;
-                case 3:
-                    user_status = "Inactivo";
-                    break;
-                default:
-                    user_status = "Desconocido";
-                    break;
-            }
+            // Convertir status numérico a string
+            string user_status = get_status_string(status);
 
-            // Store both in your data structure - for example:
-            userStates[username.toStdString()] = user_status.toStdString();
+            // Guardar en la estructura de datos
+            userStates[username.toStdString()] = user_status;
 
             if (username != actualUser) {
                 userList->addItem(username);  //Añadir a la lista
@@ -429,19 +421,13 @@ void MessageHandler::receiveMessage(const QString& message) {
                         QString::fromStdString(get_status_string(newStatus)));
         notificationLabel->show();
         notificationTimer->start(5000);
+        
+        userStates[username.toStdString()] = get_status_string(newStatus);
 
         if (actualUser != username) return; // Solo actúa si el usuario actual es el afectado
-        switch (newStatus) { 
-            case 1: // Recuperar los mensajes si se cambia a activo
-                generalChatArea->clear();
-                showChatMessages("~");
-                chatArea->clear();
-                showChatMessages(userList->currentText());
-                break;
-            case 2:
-                requestChatHistory("~");
-                requestChatHistory(userList->currentText());
-                break;
+        if (newStatus == 1) {  // Recuperar los mensajes si se cambia a activo
+            requestChatHistory("~");
+            requestChatHistory(userList->currentText());
         }
     }
     else if (messageType == 55) {  // Mensaje normal de chat
@@ -484,6 +470,10 @@ void MessageHandler::receiveMessage(const QString& message) {
         quint8 numMessages = static_cast<quint8>(data[1]);  // Número de mensajes
         int pos = 2;  // Posición para leer datos
 
+        if (pendingHistoryRequests.empty()) return;
+        
+        QString requestedHistory = pendingHistoryRequests.front();
+        pendingHistoryRequests.pop();
         for (quint8 i = 0; i < numMessages; i++) {
 
             // Extraer remitente
@@ -503,12 +493,11 @@ void MessageHandler::receiveMessage(const QString& message) {
 
             // Verificar si el mensaje ya está en el historial local
             auto& chatHistory = localChatHistory[chat_id_std];
-            if (find(chatHistory.begin(), chatHistory.end(),
-                        make_pair(username.toStdString(), content.toStdString())) == chatHistory.end()) {
-                // Agregar mensaje al historial local
-                chatHistory.emplace_back(username.toStdString(), content.toStdString());
-            }            
+            chatHistory.clear();  // Eliminar mensajes previos del historial
+            // Agregar mensaje al historial local
+            chatHistory.emplace_back(username.toStdString(), content.toStdString());
         }
+        
         showChatMessages(requestedHistory);
     }    
     else {
