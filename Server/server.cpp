@@ -107,24 +107,37 @@ string get_chat_id(const string& user1, const string& user2) {
  * 
  * @param ws Socket WebSocket del cliente al que enviar la información
  */
- void send_users_list(websocket::stream<tcp::socket>& ws) {
-    lock_guard<mutex> lock(clients_mutex);
-
+void send_users_list_unlocked(websocket::stream<tcp::socket>& ws) {
+    // Same as send_users_list but without locking the mutex
+    // The caller must ensure the mutex is already locked
+    
     vector<unsigned char> response;
-    response.push_back(static_cast<unsigned char>(51));                  // Código 51: Lista de usuarios
-    response.push_back(static_cast<unsigned char>(clients.size()));      // Número de usuarios
-
-    // Agregar información de cada usuario
+    response.push_back(static_cast<unsigned char>(51));  // Code 51: User list
+    response.push_back(static_cast<unsigned char>(clients.size()));  // Number of users
+    
+    // Add each user's information
     for (const auto& [user, client] : clients) {
-        response.push_back(static_cast<unsigned char>(user.size()));                             // Longitud del nombre
-        response.insert(response.end(), user.begin(), user.end());   // Nombre de usuario
-        response.push_back(static_cast<unsigned char>(client.status));                           // Estado
+        response.push_back(static_cast<unsigned char>(user.size()));
+        response.insert(response.end(), user.begin(), user.end());
+        response.push_back(static_cast<unsigned char>(client.status));
     }
-
-    // Enviar el buffer completo
-    ws.write(net::buffer(response));
-    cout << "📜📢 Respuesta enviada" << endl;
+    
+    try {
+        cout << "📜 Sending list of " << clients.size() << " users..." << endl;
+        ws.write(net::buffer(response));
+        cout << "📜📢 Response sent successfully" << endl;
+    } 
+    catch (const std::exception& e) {
+        cerr << "❌ Error sending user list: " << e.what() << endl;
+    }
 }
+
+// Keep the original function but make it use the unlocked version:
+void send_users_list(websocket::stream<tcp::socket>& ws) {
+    lock_guard<mutex> lock(clients_mutex);
+    send_users_list_unlocked(ws);
+}
+
 
 
 
@@ -446,16 +459,16 @@ string get_chat_id(const string& user1, const string& user2) {
     switch (messageType) {
         case 1:  // Solicitud de lista de usuarios
             {
-                cout << "📜 [" << std::this_thread::get_id() << "] Solicitud de lista de usuarios de: " << sender << endl;
-
+                cout << "📜 [" << std::this_thread::get_id() << "] User list request from: " << sender << endl;
                 lock_guard<mutex> lock(clients_mutex);
-                if (clients.find(sender) != clients.end() && clients[sender].status == 1) {
-                    send_users_list(*clients[sender].ws);
+                
+                auto it = clients.find(sender);
+                if (it != clients.end() && it->second.ws->is_open()) {
+                    send_users_list_unlocked(*it->second.ws);
                 } else {
-                    cout << "📜🔴 [" << std::this_thread::get_id() << "] No se pudo enviar la lista de usuarios (usuario no encontrado o no disponible)." << endl;
+                    cout << "📜🔴 Cannot send user list (user not found or disconnected)" << endl;
                 }
             }
-            cout << "🔓 Mutex liberado" << endl;
             break;
         case 2:  // Solicitud de información de usuario
             cout << "ℹ️ [" << std::this_thread::get_id() << "] Solicitud de info de usuario de: " << sender << endl;
