@@ -210,6 +210,8 @@ public slots:
         connect(response, &QNetworkReply::finished, this, [this, response, host, port, username](){
             int replyCode = response->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             response->deleteLater();
+
+            qDebug()<<"REPLY CODE "<<replyCode;
             
             if (replyCode == 400) {
                 qDebug() << response << replyCode;
@@ -304,6 +306,7 @@ public slots:
         chatLabel->hide(); 
         disconnectButton->hide();
         notificationLabel->hide();
+        errorLabel->clear();
     }
 
     /**

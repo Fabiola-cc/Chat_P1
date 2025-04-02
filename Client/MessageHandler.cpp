@@ -354,13 +354,15 @@ QByteArray MessageHandler::buildMessage(quint8 type, const QString& param1, cons
  * relevante para actualizar la interfaz de usuario.
  */
 void MessageHandler::receiveMessage(const QString& message) {
-    qDebug()<<"RECIBIDO ANTES "<<message;
+    
     QByteArray data = message.toUtf8();
     qDebug()<<"RECIBIDO DESPUES "<<data;
 
     if (data.isEmpty()) return;  // Validar entrada
 
     quint8 messageType = static_cast<quint8>(data[0]);  // Obtener tipo de mensaje
+
+    qDebug()<<"TIPO MENSAJE"<<messageType;
 
     // Procesar según el tipo de mensaje
     if (messageType == 50) { // ERROR
@@ -389,9 +391,10 @@ void MessageHandler::receiveMessage(const QString& message) {
             // Guardar en la estructura de datos
             this-> userStates[username.toStdString()] = user_status;
 
-            if (username != actualUser) {
-                userList->addItem(username);  //Añadir a la lista
-            } 
+            if (username != actualUser && userList->findText(username) == -1) {
+                userList->addItem(username);  // Añadir solo si no está en la lista
+            }
+            
 
             // Actualizar estado si es el usuario actual
             if (username == userList->currentText()) {
