@@ -129,6 +129,8 @@ void MessageHandler::requestUsersList() {
     // Formato: [Tipo=1]
     QByteArray request;
     request.append(static_cast<char>(1));  // Tipo 1: Obtener lista de usuarios
+
+    qDebug()<<"Pidiendo lista de usuarios: "<<request;
     
     socket.sendBinaryMessage(request);  // Enviar solicitud al servidor
 }
@@ -147,6 +149,8 @@ void MessageHandler::requestChatHistory(const QString& chatName) {
     request.append(static_cast<char>(5));  // Tipo 5: Solicitar historial
     request.append(static_cast<char>(chatName.length()));  // Longitud del nombre
     request.append(chatName.toUtf8());  // Nombre en UTF-8
+
+    qDebug()<<"Pidiendo chat history: "<<request;
 
     socket.sendBinaryMessage(request);  // Enviar solicitud al servidor
 }
@@ -167,6 +171,8 @@ void MessageHandler::requestChangeState(const QString& username, uint8_t newStat
     request.append(static_cast<char>(username.length()));  // Longitud del nombre
     request.append(username.toUtf8());  // Nombre en UTF-8
     request.append(static_cast<char>(newStatus));  // Nuevo estado
+
+    qDebug()<<"Pidiendo state change: "<<request;
 
     socket.sendBinaryMessage(request);  // Enviar solicitud al servidor
 }
@@ -249,6 +255,7 @@ void MessageHandler::sendGeneralMessage() {
 
     // Construir y enviar el mensaje
     QByteArray formattedMessage = buildMessage(4, recipient, message);  // Tipo 4: mensaje de chat
+    
     socket.sendBinaryMessage(formattedMessage);
 
     // Limpiar el campo de entrada después de enviar
