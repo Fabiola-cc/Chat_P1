@@ -71,7 +71,7 @@ public:
         errorLabel = new QLabel(this);
         errorLabel->setStyleSheet("color: red; font-weight: bold;");  // Estilo para errores
 
-        // Añadir todos los controles al layout vertical
+        // Añadir todos los controles al layout vertical 
         mainLayout->addWidget(hostInput);
         mainLayout->addWidget(portInput);
         mainLayout->addWidget(usernameInput);
@@ -81,6 +81,8 @@ public:
 
         // Componentes de la interfaz de chat (inicialmente ocultos)
         // Menú desplegable para estado del usuario
+        disconnectButton = new QPushButton("Desconectar", this);
+        disconnectButton->hide();
         statusDropdown = new QComboBox(this);
         statusDropdown->addItem("Activo", 1);       // Estado activo (valor 1)
         statusDropdown->addItem("Ocupado", 2);      // Estado ocupado (valor 2)
@@ -98,6 +100,7 @@ public:
             notificationLabel->hide();
         });
 
+        mainLayout->addWidget(disconnectButton);
         mainLayout->addWidget(statusDropdown);
         mainLayout->addWidget(notificationLabel);
 
@@ -156,6 +159,7 @@ public:
         connect(optionsButton, &QPushButton::clicked, this, &ChatClient::showOptionsDialog); // Mostrar opciones
         connect(ayudaButton, &QPushButton::clicked, this, &ChatClient::showAyudaDialog); // Mostrar opciones
         connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected); // Manejar cambio de usuario seleccionado
+        connect(disconnectButton, &QPushButton::clicked, this, &ChatClient::handleDisconnectButton);
 
         // Crear el manejador de mensajes (clase externa que procesa los mensajes)
         messageHandler = new MessageHandler(
@@ -285,6 +289,7 @@ public slots:
         errorLabel->show();
     
         // Ocultar la interfaz de chat
+        disconnectButton->hide();
         chatArea->hide();
         userList->hide();
         messageInput->hide();
@@ -297,6 +302,8 @@ public slots:
         generalSendButton->hide(); 
         statusDropdown->hide();   
         chatLabel->hide(); 
+        disconnectButton->hide();
+        notificationLabel->hide();
     }
 
     /**
@@ -352,7 +359,9 @@ public slots:
         optionsButton->show();
         ayudaButton->show();
         statusDropdown->show();
+        disconnectButton->show();
         errorLabel->hide();
+        
 
         // Registrar nombre de usuario
         messageHandler->setActualUser(usernameInput->text());
@@ -455,6 +464,19 @@ public slots:
         dialog->show();
     }
 
+    void handleDisconnectButton(){
+        messageHandler->requestChangeState(usernameInput->text(), 0);
+        QTimer::singleShot(200, this, [this]() {
+            socket.close();
+            qDebug() << "Desconectado del servidor.";
+            
+            userList->clear();
+            generalChatArea->clear();
+            chatArea->clear();
+            statusLabel->setText("Desconectado");
+        });
+    }
+
     void showAyudaDialog() {
         Ayuda *dialog1 = new Ayuda(this);
         
@@ -485,6 +507,7 @@ private:
     QLineEdit *portInput;           // Campo para puerto del servidor
     QLineEdit *usernameInput;       // Campo para nombre de usuario
     QPushButton *connectButton;     // Botón para conectar
+    QPushButton *disconnectButton;  // Botón para desconectar
     QPushButton *optionsButton;     // Botón para mostrar opciones
     QPushButton *ayudaButton;     // Botón para mostrar ayuda
     QLabel *generalChatLabel;       // Etiqueta para reconocer el área de chat general

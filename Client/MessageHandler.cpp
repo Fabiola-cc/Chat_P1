@@ -341,7 +341,7 @@ QByteArray MessageHandler::buildMessage(quint8 type, const QString& param1, cons
         message.append(static_cast<char>(param2.length()));  // Longitud
         message.append(param2.toUtf8());  // Datos
     }
-
+    qDebug() << "mensaje:" << QString::fromUtf8(message);
     return message;
 }
 
@@ -522,6 +522,7 @@ void MessageHandler::receiveMessage(const QString& message) {
     }    
     else {
         // Tipo de mensaje desconocido
+        qDebug() << "MENSAJE NO CONOCIDO" <<  messageType;
         chatArea->append("!! Mensaje desconocido recibido.");
     }
 }
