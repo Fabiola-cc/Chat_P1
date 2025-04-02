@@ -35,24 +35,47 @@ La aplicación utiliza WebSockets para la comunicación cliente-servidor con dif
 - Módulo QtWebSockets
 
 ## Instrucciones de Compilación
-
-### Prerrequisitos
+### Cliente
+#### Prerrequisitos
 - Entorno de desarrollo Qt (se recomienda Qt Creator)
 - Módulo Qt WebSockets instalado
 
-### Compilando el Cliente
-1. Abrir el proyecto en Qt Creator
-2. Configurar el proyecto para tu plataforma
-3. Compilar el proyecto usando el menú Compilar o Ctrl+B
+#### Compilando el Cliente
+1. Dirigirse a la carpeta Cliente
+2. Correr el siguiente comando para compilar el cliente
 
-Alternativamente, usando la línea de comandos:
 ```bash
 qmake
 make
 ```
 
+### Servidor
+#### Prerrequisitos
+- Módulo de Boost WebSockets instalado
+
+### Compilando el Server
+1. Dirigirse a la carpeta Server
+2. Correr el siguiente comando para compilar el servidor
+ ```bash
+g++ -o server server.cpp -I/usr/include/qt -I/usr/include/qt/QtWebSockets -I/usr/include/qt/QtCore -I/usr/include/qt/QtNetwork -lQt5Core -lQt5WebSockets -lQt5Network
+```  
 
 ## Guía de Uso
+
+### Ejecutar las aplicaciones
+- Correr los siguientes comandos:
+
+```bash
+./client
+```
+
+```bash
+./server
+```
+
+### Inicio de Sesión
+- Ingresa los datos a solicitud, estos datos se autorellenan con la información necesaria para conecatrse con el servidor. (Recuerda cambiar el nombre de usuario)
+- Aprieta el boton de Conectar para realizar el enlace con el servidor.
 
 ### Chat General
 - Los mensajes enviados en el panel izquierdo se difunden a todos los usuarios conectados
