@@ -42,6 +42,7 @@ MessageHandler::MessageHandler(QWebSocket& socket,
 
     // Conectar señales y slots para el chat general
     connect(generalSendButton, &QPushButton::clicked, this, &MessageHandler::sendGeneralMessage);
+    connect(&socket, &QWebSocket::binaryMessageReceived, this, &MessageHandler::receiveBinaryMessage);
 
     // Conectar cambios de estado
     connect(stateList, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MessageHandler::onStateChanged);
@@ -538,4 +539,17 @@ void MessageHandler::receiveMessage(const QString& message) {
         qDebug() << "MENSAJE NO CONOCIDO" <<  messageType;
         chatArea->append("!! Mensaje desconocido recibido.");
     }
+}
+
+void MessageHandler::receiveBinaryMessage(const QByteArray& data) {
+    qDebug() << "MENSAJE BINARIO RECIBIDO:" << data;
+    
+    if (data.isEmpty()) return;
+    
+    quint8 messageType = static_cast<quint8>(data[0]);
+    qDebug() << "TIPO MENSAJE BINARIO:" << messageType;
+    
+    // Convertir los datos binarios a QString y utilizar la función existente
+    QString message = QString::fromUtf8(data);
+    receiveMessage(message);
 }

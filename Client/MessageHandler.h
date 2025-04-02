@@ -40,6 +40,7 @@ private slots:
     void sendMessage();         // Enviar mensaje en chat personal
     void sendGeneralMessage();  // Nuevo slot para enviar mensaje en chat general
     void receiveMessage(const QString& message);
+    void receiveBinaryMessage(const QByteArray& data);
     void onStateChanged(int index);
     void showChatMessages(const QString& user2);
     QString get_chat_id(const QString& user2);
