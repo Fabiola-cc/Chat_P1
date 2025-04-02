@@ -546,6 +546,7 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
     http::request<http::string_body> req;
     std::string username;
     bool connectionAccepted = false;
+    bool newRegister = false;
     
 
     try {
@@ -592,6 +593,7 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
             // Caso 1: Usuario completamente nuevo
             clients[username] = {ws, 1, clientIP};  // Estado: Activo
             cout << "✅ Nuevo usuario conectado: " << username<< " desde " << clientIP  << endl;
+            newRegister = true;
             connectionAccepted = true;
         } else if (clients[username].status == 0) {
             // Caso 2: Usuario estaba desconectado y se reconecta
@@ -605,7 +607,10 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
             ws->accept(req);
             cout << "🔗 Cliente conectado\n";
             print_users();
-            broadcast_new_user(username);
+            if (newRegister){
+                broadcast_new_user(username);
+            }
+            
         }
 
         // Bucle principal de la sesión
