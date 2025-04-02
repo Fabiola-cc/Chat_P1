@@ -354,7 +354,10 @@ QByteArray MessageHandler::buildMessage(quint8 type, const QString& param1, cons
  * relevante para actualizar la interfaz de usuario.
  */
 void MessageHandler::receiveMessage(const QString& message) {
+    qDebug()<<"RECIBIDO ANTES "<<message;
     QByteArray data = message.toUtf8();
+    qDebug()<<"RECIBIDO DESPUES "<<data;
+
     if (data.isEmpty()) return;  // Validar entrada
 
     quint8 messageType = static_cast<quint8>(data[0]);  // Obtener tipo de mensaje

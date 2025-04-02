@@ -606,7 +606,6 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
             cout << "🔗 Cliente conectado\n";
             print_users();
             broadcast_new_user(username);
-            send_users_list(*ws);
         }
 
         // Bucle principal de la sesión

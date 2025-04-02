@@ -365,6 +365,9 @@ public slots:
 
         // Registrar nombre de usuario
         messageHandler->setActualUser(usernameInput->text());
+        
+        // Solicitar lista de usuarios
+        messageHandler->requestUsersList();
 
         inactivityTimer->start(40000);
     }    
