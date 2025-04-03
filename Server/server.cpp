@@ -601,6 +601,25 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
             clients[username] = {ws, 1};  // Estado: Activo
             cout << "🔄 Usuario reconectado: " << username << " desde " << clientIP << endl;
             connectionAccepted = true;
+
+            //Notificar el cambio de estado a activo
+            std::vector<unsigned char> message;
+            // Construir el mensaje para el cambio de estado
+            message.push_back(54);  // Tipo de mensaje 54: Notificación de cambio de estado
+            message.push_back(static_cast<unsigned char>(username.size()));  // Longitud del nombre de usuario
+            message.insert(message.end(), username.begin(), username.end());  // Nombre de usuario
+            message.push_back(1);  // Nuevo estado
+
+            //NOTIFICAR A TODOS
+            for (auto& [user, client] : clients) {
+                if (user != username && client.ws && client.ws->is_open()) {
+                    try {
+                        client.ws->write(net::buffer(message));
+                    } catch (const std::exception& e) {
+                        cerr << "⚠️ Error al notificar desconexión a " << user << ": " << e.what() << endl;
+                    }
+                }
+            }
         }
 
         if (connectionAccepted) {
