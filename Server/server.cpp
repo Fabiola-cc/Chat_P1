@@ -625,6 +625,7 @@ bool verificarEncabezadosWebSocket(const http::request<http::string_body>& req, 
         if (connectionAccepted) {
             // Aceptar la conexión WebSocket
             ws->accept(req);
+            ws->binary(true);
             cout << "🔗 Cliente conectado\n";
             print_users();
             if (newRegister){
