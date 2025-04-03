@@ -70,6 +70,7 @@ public:
         statusLabel = new QLabel("Introduce los datos y presiona conectar.", this);
         errorLabel = new QLabel(this);
         errorLabel->setStyleSheet("color: red; font-weight: bold;");  // Estilo para errores
+        
 
         // Añadir todos los controles al layout vertical 
         mainLayout->addWidget(hostInput);
@@ -114,8 +115,14 @@ public:
         generalMessageInput->hide();                       // Oculto hasta que se conecte
         generalSendButton = new QPushButton("Enviar", this); // Botón para enviar mensajes
         generalSendButton->hide();                         // Oculto hasta que se conecte
+        refreshButtonGeneral = new QPushButton("Refresh", this); 
+        refreshButtonGeneral->hide();
+        refreshButtonPrivate = new QPushButton("Refresh", this); 
+        refreshButtonPrivate->hide();
 
+        
         leftLayout->addWidget(generalChatLabel);
+        leftLayout->addWidget(refreshButtonGeneral);
         leftLayout->addWidget(generalChatArea);
         leftLayout->addWidget(generalMessageInput);
         leftLayout->addWidget(generalSendButton);
@@ -135,6 +142,7 @@ public:
         userList->hide();                           // Oculto hasta que se conecte
 
         rightLayout->addWidget(chatLabel);
+        rightLayout->addWidget(refreshButtonPrivate);
         rightLayout->addWidget(chatArea);
         rightLayout->addWidget(userList);
         rightLayout->addWidget(messageInput);
@@ -160,6 +168,9 @@ public:
         connect(ayudaButton, &QPushButton::clicked, this, &ChatClient::showAyudaDialog); // Mostrar opciones
         connect(userList, &QComboBox::currentTextChanged, this, &ChatClient::onUserSelected); // Manejar cambio de usuario seleccionado
         connect(disconnectButton, &QPushButton::clicked, this, &ChatClient::handleDisconnectButton);
+        connect(refreshButtonGeneral, &QPushButton::clicked, this, &ChatClient::handleRefreshGeneral);
+        connect(refreshButtonPrivate, &QPushButton::clicked, this, &ChatClient::handleRefreshPrivate);
+
 
         // Crear el manejador de mensajes (clase externa que procesa los mensajes)
         messageHandler = new MessageHandler(
@@ -307,6 +318,8 @@ public slots:
         disconnectButton->hide();
         notificationLabel->hide();
         errorLabel->clear();
+        refreshButtonGeneral->hide();
+        refreshButtonPrivate->hide();
     }
 
     /**
@@ -348,6 +361,8 @@ public slots:
         generalChatArea->show();
         generalMessageInput->show();
         generalSendButton->show();
+        refreshButtonGeneral->show();
+        refreshButtonPrivate->show();
 
         // Solicitar historial de chat general
         generalChatArea->clear();  // Limpiar antes de mostrar los mensajes
@@ -434,6 +449,7 @@ public slots:
         OptionsDialog *dialog = new OptionsDialog(this);
         
         // Pasar la lista de usuarios al diálogo
+        messageHandler->requestUsersList();
         dialog->setUserList(userList);
         dialog->setUserStatesFunction(userList, messageHandler->getUserStates());
         
@@ -493,6 +509,18 @@ public slots:
         dialog1->show();
     }
 
+    void handleRefreshGeneral(){
+        messageHandler->requestChatHistory("~");
+    }
+
+    void handleRefreshPrivate() {
+        QString selectedUser = userList->currentText();  // Obtener usuario seleccionado
+        if (!selectedUser.isEmpty()) {  // Verificar que no esté vacío
+            messageHandler->requestChatHistory(selectedUser);
+        }
+    }
+    
+
     QString getLocalIPAddress() {
         for (const QHostAddress &address : QNetworkInterface::allAddresses()) {
             if (address.protocol() == QAbstractSocket::IPv4Protocol && 
@@ -530,6 +558,8 @@ private:
     QLabel *notificationLabel;
     QTimer *notificationTimer;
     QTimer *inactivityTimer;
+    QPushButton *refreshButtonGeneral;
+    QPushButton *refreshButtonPrivate;
 };
 
 /**

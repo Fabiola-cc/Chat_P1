@@ -154,10 +154,15 @@ void OptionsDialog::setUserStatesFunction(QComboBox* userList, const std::unorde
     // Limpiar la lista actual
     userListView->clear();
    
+    for (const auto& [username, status] : userStates) {
+        // No añadir el usuario actual (ya que no queremos chatear con nosotros mismos)
+        userListView->addItem(QString::fromStdString(username));
+    }
     // Copiar todos los elementos de la lista original
     for (int i = 0; i < userList->count(); i++) {
         userListView->addItem(userList->itemText(i));
     }
+    
     
     // Conectar el botón para mostrar todos los usuarios
     connect(showAllUsersButton, &QPushButton::clicked, this, &OptionsDialog::onShowAllUsersClicked);

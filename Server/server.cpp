@@ -384,13 +384,14 @@ void send_users_list(websocket::stream<tcp::socket>& ws) {
     
     if (it != clients.end()) {
         // Usuario encontrado - incluir información
-        response.push_back(static_cast<unsigned char>(1));  // Indicador de éxito
+       // response.push_back(static_cast<unsigned char>(1));  // Indicador de éxito
         response.push_back(usernameLen);
         response.insert(response.end(), targetUsername.begin(), targetUsername.end());
         response.push_back(it->second.status);
         
         cout << "ℹ️ Información de usuario " << targetUsername << " enviada a " << requester << endl;
     } else {
+        response.clear();  // Limpiar la respuesta anterior
         response.push_back(static_cast<unsigned char>(50));  // Código 50: Error
         response.push_back(static_cast<unsigned char>(1));   // Usuario no existente
 

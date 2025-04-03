@@ -375,6 +375,17 @@ void MessageHandler::receiveMessage(const QString& message) {
     // Procesar según el tipo de mensaje
     if (messageType == 50) { // ERROR
         quint8 errorType = static_cast<quint8>(data[1]);
+        QString errorMsg;
+        switch (errorType) {
+            case 1: errorMsg = "El usuario que intentas obtener no existe."; break;
+            case 2: errorMsg = "El estatus enviado es inválido."; break;
+            case 3: errorMsg = "¡El mensaje está vacío!"; break;
+            case 4: errorMsg = "El mensaje fue enviado a un usuario con estatus desconectado"; break;
+            default: errorMsg = "Error desconocido"; break;
+        }
+        
+        generalChatArea->append("Error: " + errorMsg);
+        cerr << "⚠️ " + errorMsg.toStdString() << endl;  // Log en consola
         cerr << "⚠️ " + get_error_string(errorType) << endl;  // Log en consola
     }
     else if (messageType == 51) {  // Lista de usuarios con estados
@@ -422,9 +433,9 @@ void MessageHandler::receiveMessage(const QString& message) {
 
         if (success) {
             // Extraer información del usuario
-            quint8 usernameLen = static_cast<quint8>(data[2]);
-            QString username = QString::fromUtf8(data.mid(3, usernameLen));
-            quint8 status = static_cast<quint8>(data[3 + usernameLen]);
+            quint8 usernameLen = static_cast<quint8>(data[1]);
+            QString username = QString::fromUtf8(data.mid(2, usernameLen));
+            quint8 status = static_cast<quint8>(data[2 + usernameLen]);
 
             // Llamar al callback si está configurado
             if (m_userInfoCallback) {
